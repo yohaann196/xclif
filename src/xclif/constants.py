@@ -1,0 +1,3 @@
+NO_DESC = "No description"
+NAME_DESC_PADDING = 2
+INITIAL_LEFT_PADDING = 2
