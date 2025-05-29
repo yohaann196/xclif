@@ -1,6 +1,7 @@
 # import shlex
 
 from collections import defaultdict
+from enum import KEEP
 from typing import TYPE_CHECKING, Callable
 
 from xclif.definition import Argument, Option
@@ -51,7 +52,13 @@ def parse_options[T](options: dict[str, Option], args: list[str]) -> _ParsedOpti
                 break
             if arg.startswith("--"):
                 snake_case = arg.removeprefix("--").replace("-", "_")
-                parsed_options[snake_case].append(options[snake_case].converter(arg))
+                try:
+                    parsed_options[snake_case].append(
+                        options[snake_case].converter(arg)
+                    )
+                except KeyError as err:
+                    msg = f"Unknown option {arg}"
+                    raise RuntimeError(msg) from err
             else:
                 # TODO: get alias
                 msg = "Short options are not implemented yet"
@@ -80,7 +87,6 @@ def parse_and_execute_impl(
     arguments = command.arguments
     subcommands = command.subcommands
     options = command.options
-    run = command.run
     subcommands = command.subcommands
 
     if not subcommands:
@@ -89,7 +95,7 @@ def parse_and_execute_impl(
             arg.converter(raw) for raw, arg in zip(args, arguments, strict=False)
         ]
         parsed_options = parse_options(options, args[len(arguments) :])
-        return with_implicit_options(run)(
+        return with_implicit_options(command)(
             *parsed_arguments, **flatten_dict_values(parsed_options)
         )
     # Case 2: Subcommands
@@ -110,7 +116,16 @@ def parse_and_execute_impl(
                 break
             if arg.startswith("--"):
                 snake_case = arg.removeprefix("--").replace("-", "_")
-                parsed_options[snake_case].append(options[snake_case].converter(arg))
+                try:
+                    parsed_options[snake_case].append(
+                        options[snake_case].converter(arg)
+                    )
+                except KeyError as err:
+                    msg = f"Unknown option {arg}"
+                    # TODO: Better error handling (so we can differentiate
+                    # between errors in the user (of the CLI) and errors in
+                    # the users of the framework itself)
+                    raise RuntimeError(msg) from err
             else:
                 # TODO: get alias
                 msg = "Short options are not implemented yet"
@@ -120,7 +135,7 @@ def parse_and_execute_impl(
         i += 1
     else:
         # No subcommands detected
-        return with_implicit_options(run)(**flatten_dict_values(parsed_options))
+        return with_implicit_options(command)(**flatten_dict_values(parsed_options))
     # TODO: Figure cascading options
     if args[i] in subcommands:
         return subcommands[args[i]].execute(args[i + 1 :])
@@ -130,14 +145,14 @@ def parse_and_execute_impl(
     raise RuntimeError("unexpected argument")
 
 
-type _Runnable = Callable[..., int]
-
-
-def with_implicit_options(run: _Runnable) -> _Runnable:
+def with_implicit_options(command: "Command") -> Callable[..., int]:
     def wrapper(*args, **kwargs) -> int:
-        if kwargs.get("help") or kwargs.get("h"):
-            print("Help lol")
+        if kwargs.get("help"):
+            command.print_long_help()
             return 0
-        return run(*args, **kwargs)
+        if kwargs.get("h"):
+            command.print_short_help()
+            return 0
+        return command.run(*args, **kwargs)
 
     return wrapper
