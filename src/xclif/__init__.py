@@ -4,9 +4,21 @@ import types
 from dataclasses import dataclass
 from typing import NoReturn, Self
 
-from xclif.command import Command
+from xclif.command import Command, command
 from xclif.importer import get_modules
 
+__all__ = ["Cli", "command"]
+
+# TODO: Perhaps Configs could be annotated?
+class WithConfig[T]:
+    # TODO: polymorphism? file configs? env configs??
+    # TODO: more arguments
+    def __class_getitem__(cls, item: T | tuple[T, str]) -> type[T]:
+        # For now, as an MVP, WithConfig is not implemented
+        # TODO: Instantiate an instance of Config
+        if isinstance(item, tuple):
+            return item[0]
+        return item
 
 @dataclass
 class Cli:

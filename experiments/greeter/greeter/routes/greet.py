@@ -1,4 +1,4 @@
-from xclif import WithConfig, command, log
+from xclif import WithConfig, command  # , log
 
 
 # This would create a command with `name` as an argument and template
@@ -8,4 +8,4 @@ from xclif import WithConfig, command, log
 # from the environment variables.
 @command()
 def _(name: WithConfig[str], template: WithConfig[str] = "Hello, {}!") -> None:
-    log.print(template.format(name))
+    print(template.format(name))

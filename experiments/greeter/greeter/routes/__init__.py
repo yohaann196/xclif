@@ -1,6 +1,6 @@
 from xclif import command
 
 
-@command(name="greeter", empty=True)
+@command()
 def _() -> None:
-    print("Hello")
+    print("this is the main command")

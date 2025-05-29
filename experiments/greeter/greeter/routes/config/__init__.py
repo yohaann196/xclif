@@ -1,6 +1,6 @@
 from xclif import command
 
 
-@command(empty=True)
+@command()
 def _() -> None:
     """Manage greeter config."""
