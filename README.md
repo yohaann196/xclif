@@ -92,7 +92,7 @@ No registration, no boilerplate. Drop a file in the right folder and the command
 
 ## ExtendedIO
 
-ExtendedIO is Xclif's approach to transparent resource access. Instead of limiting CLI inputs to local file paths, ExtendedIO lets commands accept arbitrary URIs — URLs, zip archives, SSH paths, git repositories — and resolves them behind the scenes.
+ExtendedIO is Xclif's approach to transparent resource access. Instead of limiting CLI inputs to local file paths, ExtendedIO lets commands accept arbitrary URIs — URLs, zip archives, SSH paths, git repositories — and resolves them behind the scenes. The API uses dependency injection to provide a unified interface for accessing these resources.
 
 *Coming soon.*
 
