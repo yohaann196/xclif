@@ -114,7 +114,8 @@ def test_command_has_implicit_options():
     cmd = Command("test", lambda: 0)
     assert "help" in cmd.implicit_options
     assert "verbose" in cmd.implicit_options
-    assert "version" in cmd.implicit_options
+    # version is NOT an implicit option — it's injected by Cli on root only
+    assert "version" not in cmd.implicit_options
     # implicit options must NOT bleed into user-defined options
     assert "help" not in cmd.options
     assert "verbose" not in cmd.options
@@ -211,3 +212,78 @@ def test_option_default_any_type():
 
     opt2 = Option("items", list, "Items", [1, 2, 3])
     assert opt2.default == [1, 2, 3]
+
+
+# ---------------------------------------------------------------------------
+# extract_parameters — variadic (*args)
+# ---------------------------------------------------------------------------
+
+
+def test_variadic_parameter_extracted():
+    def f(*files: str) -> None: ...
+    args, opts = extract_parameters(f)
+    assert len(args) == 1
+    assert args[0].variadic is True
+    assert args[0].name == "files"
+    assert args[0].converter is str
+
+
+def test_variadic_with_fixed_params():
+    def f(dest: str, *files: str) -> None: ...
+    args, opts = extract_parameters(f)
+    assert len(args) == 2
+    assert args[0].variadic is False
+    assert args[1].variadic is True
+
+
+def test_variadic_no_annotation_raises():
+    exec_globals: dict = {}
+    exec("def f(*files) -> None: ...", exec_globals)
+    with pytest.raises(ValueError, match="no type hint"):
+        extract_parameters(exec_globals["f"])
+
+
+# ---------------------------------------------------------------------------
+# extract_parameters — auto short aliases
+# ---------------------------------------------------------------------------
+
+
+def test_auto_short_alias_generated():
+    def f(name: str = "default") -> None: ...
+    args, opts = extract_parameters(f)
+    assert opts["name"].aliases == ["-n"]
+
+
+def test_auto_alias_avoids_implicit_collision():
+    """'-v' is taken by --verbose, '-h' by --help, so options starting
+    with 'v' or 'h' should try a different char."""
+    def f(value: str = "") -> None: ...
+    args, opts = extract_parameters(f)
+    # '-v' is taken by implicit --verbose, so should get '-a' (from 'value')
+    # or no alias, depending on chars available
+    for alias in opts["value"].aliases:
+        assert alias != "-v"
+        assert alias != "-h"
+
+
+# ---------------------------------------------------------------------------
+# extract_parameters — int/float/bool types now work
+# ---------------------------------------------------------------------------
+
+
+def test_int_parameter():
+    def f(count: int) -> None: ...
+    args, opts = extract_parameters(f)
+    assert args[0].converter is int
+
+
+def test_float_parameter():
+    def f(rate: float) -> None: ...
+    args, opts = extract_parameters(f)
+    assert args[0].converter is float
+
+
+def test_bool_option():
+    def f(dry_run: bool = False) -> None: ...
+    args, opts = extract_parameters(f)
+    assert opts["dry_run"].converter is bool

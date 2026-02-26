@@ -113,3 +113,47 @@ def test_completions_subcommand_exists(cli):
 def test_completions_executes(cli, capsys):
     result = cli.root_command.execute(["completions"])
     assert result == 0
+
+
+# ---------------------------------------------------------------------------
+# New feature integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_greet_equals_form(root, capsys):
+    root.execute(["greet", "--template=Hi, {}!", "Alice"])
+    assert "Hi, Alice!" in capsys.readouterr().out
+
+
+def test_root_help_short_flag(root, capsys):
+    result = root.execute(["-h"])
+    assert result == 0
+    assert capsys.readouterr().out != ""
+
+
+def test_greet_help_short_flag(root, capsys):
+    result = root.execute(["greet", "-h"])
+    assert result == 0
+
+
+def test_verbose_before_subcommand(root, capsys):
+    result = root.execute(["-v", "greet", "Alice"])
+    assert result == 0
+    assert "Alice" in capsys.readouterr().out
+
+
+def test_double_dash_in_greet(root, capsys):
+    root.execute(["greet", "--", "--not-a-flag"])
+    out = capsys.readouterr().out
+    assert "--not-a-flag" in out
+
+
+def test_version_on_root(cli, capsys):
+    result = cli.root_command.execute(["--version"])
+    assert result == 0
+
+
+def test_version_not_on_subcommand(root):
+    """--version should not be recognized on subcommands."""
+    with pytest.raises(RuntimeError, match="Unknown option"):
+        root.execute(["greet", "--version", "Alice"])

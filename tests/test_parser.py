@@ -3,7 +3,7 @@
 import pytest
 
 from xclif.command import Command
-from xclif.definition import Option
+from xclif.definition import Argument, Option
 from xclif.parser import _parse_token_stream, parse_and_execute_impl
 
 
@@ -12,8 +12,8 @@ from xclif.parser import _parse_token_stream, parse_and_execute_impl
 # ---------------------------------------------------------------------------
 
 
-def _opt(name: str, typ: type, default=None) -> Option:
-    return Option(name, typ, "desc", default=default)
+def _opt(name: str, typ: type, default=None, aliases=None) -> Option:
+    return Option(name, typ, "desc", default=default, aliases=aliases or [])
 
 
 def _bool_opts(*names: str) -> dict[str, Option]:
@@ -48,7 +48,7 @@ def test_bool_flag_empty():
 
 
 # ---------------------------------------------------------------------------
-# _parse_token_stream — value options
+# _parse_token_stream — value options (space form)
 # ---------------------------------------------------------------------------
 
 
@@ -72,6 +72,101 @@ def test_hyphenated_option_maps_to_snake():
 def test_repeated_value_option():
     _, opts, _ = _parse_token_stream(_str_opts("tag"), {}, ["--tag", "a", "--tag", "b"])
     assert opts["tag"] == ["a", "b"]
+
+
+# ---------------------------------------------------------------------------
+# _parse_token_stream — equals form (--name=value)
+# ---------------------------------------------------------------------------
+
+
+def test_equals_form_str():
+    _, opts, _ = _parse_token_stream(_str_opts("name"), {}, ["--name=Alice"])
+    assert opts["name"] == ["Alice"]
+
+
+def test_equals_form_int():
+    opts_def = {"count": _opt("count", int)}
+    _, opts, _ = _parse_token_stream(opts_def, {}, ["--count=42"])
+    assert opts["count"] == [42]
+
+
+def test_equals_form_value_with_equals():
+    """--url=https://example.com/path?a=1 should parse correctly."""
+    _, opts, _ = _parse_token_stream(_str_opts("url"), {}, ["--url=https://a.com?b=1"])
+    assert opts["url"] == ["https://a.com?b=1"]
+
+
+def test_equals_form_bool_raises():
+    with pytest.raises(RuntimeError, match="does not take a value"):
+        _parse_token_stream(_bool_opts("verbose"), {}, ["--verbose=true"])
+
+
+def test_equals_form_unknown_raises():
+    with pytest.raises(RuntimeError, match="Unknown option"):
+        _parse_token_stream({}, {}, ["--nope=val"])
+
+
+# ---------------------------------------------------------------------------
+# _parse_token_stream — short options
+# ---------------------------------------------------------------------------
+
+
+def test_short_bool_flag():
+    opts = {"verbose": _opt("verbose", bool, aliases=["-v"])}
+    _, parsed, _ = _parse_token_stream(opts, {}, ["-v"])
+    assert parsed["verbose"] == [True]
+
+
+def test_short_value_option():
+    opts = {"name": _opt("name", str, aliases=["-n"])}
+    _, parsed, _ = _parse_token_stream(opts, {}, ["-n", "Alice"])
+    assert parsed["name"] == ["Alice"]
+
+
+def test_short_repeated():
+    opts = {"verbose": _opt("verbose", bool, aliases=["-v"])}
+    _, parsed, _ = _parse_token_stream(opts, {}, ["-v", "-v", "-v"])
+    assert parsed["verbose"] == [True, True, True]
+
+
+def test_short_mixed_with_long():
+    opts = {"verbose": _opt("verbose", bool, aliases=["-v"])}
+    _, parsed, _ = _parse_token_stream(opts, {}, ["-v", "--verbose"])
+    assert parsed["verbose"] == [True, True]
+
+
+def test_short_unknown_raises():
+    with pytest.raises(RuntimeError, match="Unknown option"):
+        _parse_token_stream({}, {}, ["-x"])
+
+
+def test_short_value_missing_raises():
+    opts = {"name": _opt("name", str, aliases=["-n"])}
+    with pytest.raises(RuntimeError, match="requires a value"):
+        _parse_token_stream(opts, {}, ["-n"])
+
+
+# ---------------------------------------------------------------------------
+# _parse_token_stream — -- separator
+# ---------------------------------------------------------------------------
+
+
+def test_double_dash_dumps_rest_as_positionals():
+    pos, opts, _ = _parse_token_stream(_bool_opts("verbose"), {}, ["--", "--verbose", "foo"])
+    assert pos == ["--verbose", "foo"]
+    assert opts == {}
+
+
+def test_double_dash_after_option():
+    opts_def = _bool_opts("verbose")
+    pos, opts, _ = _parse_token_stream(opts_def, {}, ["--verbose", "--", "--not-a-flag"])
+    assert opts["verbose"] == [True]
+    assert pos == ["--not-a-flag"]
+
+
+def test_double_dash_empty_rest():
+    pos, _, _ = _parse_token_stream({}, {}, ["--"])
+    assert pos == []
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +220,6 @@ def test_value_option_consuming_subcommand_name_as_value():
     all_opts = _str_opts("format")
     subcmds = {"json": Command("json", lambda: 0)}
     pos, opts, idx = _parse_token_stream(all_opts, subcmds, ["--format", "json"])
-    # json was consumed as the value of --format, not as a subcommand
     assert opts["format"] == ["json"]
     assert idx is None
 
@@ -135,7 +229,7 @@ def test_second_token_invokes_subcommand_after_greedy_consumption():
     subcmds = {"json": Command("json", lambda: 0)}
     pos, opts, idx = _parse_token_stream(all_opts, subcmds, ["--format", "json", "json"])
     assert opts["format"] == ["json"]
-    assert idx == 2  # second 'json' is the subcommand
+    assert idx == 2
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +237,7 @@ def test_second_token_invokes_subcommand_after_greedy_consumption():
 # ---------------------------------------------------------------------------
 
 
-def test_unknown_option_raises():
+def test_unknown_long_option_raises():
     with pytest.raises(RuntimeError, match="Unknown option"):
         _parse_token_stream({}, {}, ["--nope"])
 
@@ -151,16 +245,6 @@ def test_unknown_option_raises():
 def test_value_option_missing_value_raises():
     with pytest.raises(RuntimeError, match="requires a value"):
         _parse_token_stream(_str_opts("name"), {}, ["--name"])
-
-
-def test_short_option_raises_not_implemented():
-    with pytest.raises(NotImplementedError):
-        _parse_token_stream({}, {}, ["-v"])
-
-
-def test_double_dash_raises_not_implemented():
-    with pytest.raises(NotImplementedError):
-        _parse_token_stream({}, {}, ["--"])
 
 
 # ---------------------------------------------------------------------------
@@ -178,13 +262,12 @@ def test_leaf_no_args_executes(capsys):
     assert "ran" in capsys.readouterr().out
 
 
-def test_leaf_positional_arg_passed(capsys):
+def test_leaf_positional_arg_passed():
     received = []
 
     def run(name: str) -> None:
         received.append(name)
 
-    from xclif.definition import Argument
     cmd = Command("test", run, arguments=[Argument("name", str, "desc")])
     parse_and_execute_impl(["Alice"], cmd)
     assert received == ["Alice"]
@@ -213,20 +296,18 @@ def test_leaf_option_default_used():
 
 
 def test_leaf_missing_required_arg_raises():
-    from xclif.definition import Argument
     cmd = Command("test", lambda name: None, arguments=[Argument("name", str, "desc")])
     with pytest.raises(RuntimeError, match="Missing required argument"):
         parse_and_execute_impl([], cmd)
 
 
-def test_leaf_interspersed_option_and_positional(capsys):
+def test_leaf_interspersed_option_and_positional():
     received = {}
 
     def run(name: str, greeting: str = "hi") -> None:
         received["name"] = name
         received["greeting"] = greeting
 
-    from xclif.definition import Argument
     cmd = Command(
         "test", run,
         arguments=[Argument("name", str, "desc")],
@@ -234,6 +315,89 @@ def test_leaf_interspersed_option_and_positional(capsys):
     )
     parse_and_execute_impl(["--greeting", "hey", "Alice"], cmd)
     assert received == {"name": "Alice", "greeting": "hey"}
+
+
+def test_leaf_equals_form_option():
+    received = {}
+
+    def run(greeting: str = "hi") -> None:
+        received["greeting"] = greeting
+
+    cmd = Command("test", run, options={"greeting": Option("greeting", str, "desc", "hi")})
+    parse_and_execute_impl(["--greeting=hey"], cmd)
+    assert received["greeting"] == "hey"
+
+
+# ---------------------------------------------------------------------------
+# parse_and_execute_impl — variadic positional args
+# ---------------------------------------------------------------------------
+
+
+def test_variadic_consumes_all_positionals():
+    received = []
+
+    def run(*files: str) -> None:
+        received.extend(files)
+
+    cmd = Command("add", run, arguments=[Argument("files", str, "Files to add", variadic=True)])
+    parse_and_execute_impl(["a.py", "b.py", "c.py"], cmd)
+    assert received == ["a.py", "b.py", "c.py"]
+
+
+def test_variadic_zero_args():
+    received = []
+
+    def run(*files: str) -> None:
+        received.extend(files)
+
+    cmd = Command("add", run, arguments=[Argument("files", str, "Files to add", variadic=True)])
+    parse_and_execute_impl([], cmd)
+    assert received == []
+
+
+def test_variadic_with_fixed_args():
+    received = {}
+
+    def run(dest: str, *files: str) -> None:
+        received["dest"] = dest
+        received["files"] = list(files)
+
+    cmd = Command(
+        "cp", run,
+        arguments=[
+            Argument("dest", str, "Destination"),
+            Argument("files", str, "Files to copy", variadic=True),
+        ],
+    )
+    parse_and_execute_impl(["target/", "a.py", "b.py"], cmd)
+    assert received == {"dest": "target/", "files": ["a.py", "b.py"]}
+
+
+def test_variadic_with_options():
+    received = {}
+
+    def run(*files: str, recursive: str = "false") -> None:
+        received["files"] = list(files)
+        received["recursive"] = recursive
+
+    cmd = Command(
+        "rm", run,
+        arguments=[Argument("files", str, "Files", variadic=True)],
+        options={"recursive": Option("recursive", str, "Recursive", "false")},
+    )
+    parse_and_execute_impl(["--recursive", "true", "a.py", "b.py"], cmd)
+    assert received == {"files": ["a.py", "b.py"], "recursive": "true"}
+
+
+def test_variadic_with_double_dash():
+    received = []
+
+    def run(*files: str) -> None:
+        received.extend(files)
+
+    cmd = Command("add", run, arguments=[Argument("files", str, "Files", variadic=True)])
+    parse_and_execute_impl(["a.py", "--", "--not-a-flag"], cmd)
+    assert received == ["a.py", "--not-a-flag"]
 
 
 # ---------------------------------------------------------------------------
@@ -245,22 +409,49 @@ def test_help_flag_returns_zero_and_prints(capsys):
     cmd = Command("test", lambda: 0)
     result = parse_and_execute_impl(["--help"], cmd)
     assert result == 0
-    # rich prints something
+    assert capsys.readouterr().out != ""
+
+
+def test_help_short_flag_returns_zero(capsys):
+    cmd = Command("test", lambda: 0)
+    result = parse_and_execute_impl(["-h"], cmd)
+    assert result == 0
     assert capsys.readouterr().out != ""
 
 
 def test_implicit_options_not_forwarded_to_run():
-    """--verbose must not appear in run()'s kwargs."""
     received_kwargs = {}
 
     def run(**kwargs) -> None:
         received_kwargs.update(kwargs)
 
-    # A command with no declared options
     cmd = Command("test", run)
     parse_and_execute_impl(["--verbose"], cmd)
     assert "verbose" not in received_kwargs
     assert "help" not in received_kwargs
+
+
+# ---------------------------------------------------------------------------
+# parse_and_execute_impl — --version
+# ---------------------------------------------------------------------------
+
+
+def test_version_flag_prints_and_returns_zero(capsys):
+    cmd = Command("myapp", lambda: 0, version="1.2.3")
+    # Inject --version into implicit options (normally done by Cli)
+    cmd.implicit_options["version"] = Option("version", bool, "Show version")
+    result = parse_and_execute_impl(["--version"], cmd)
+    assert result == 0
+    out = capsys.readouterr().out
+    assert "myapp" in out
+    assert "1.2.3" in out
+
+
+def test_version_flag_unknown_when_not_root(capsys):
+    cmd = Command("myapp", lambda: 0)
+    # No version injected → --version should be unknown
+    with pytest.raises(RuntimeError, match="Unknown option"):
+        parse_and_execute_impl(["--version"], cmd)
 
 
 # ---------------------------------------------------------------------------
@@ -269,27 +460,13 @@ def test_implicit_options_not_forwarded_to_run():
 
 
 def test_cascading_verbose_passed_to_context():
-    """--verbose at parent level should update the context for children."""
-    context_seen = {}
-
-    def child_run() -> None:
-        pass
-
-    child = Command("child", child_run)
-
-    def parent_run() -> None:
-        pass
-
-    parent = Command("parent", parent_run, subcommands={"child": child})
-
-    # We test the context by inspecting parse_and_execute_impl's behaviour:
-    # if --verbose is parsed before 'child', the child should be called without error
+    child = Command("child", lambda: None)
+    parent = Command("parent", lambda: None, subcommands={"child": child})
     result = parse_and_execute_impl(["--verbose", "child"], parent)
     assert result == 0
 
 
 def test_verbose_not_in_child_run_kwargs():
-    """Even when --verbose cascades, it must not appear in child's run() kwargs."""
     received = {}
 
     def child_run(**kwargs) -> None:
@@ -297,7 +474,6 @@ def test_verbose_not_in_child_run_kwargs():
 
     child = Command("child", child_run)
     parent = Command("parent", lambda: 0, subcommands={"child": child})
-
     parse_and_execute_impl(["--verbose", "child"], parent)
     assert "verbose" not in received
 

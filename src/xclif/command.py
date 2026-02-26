@@ -21,14 +21,18 @@ class Command:
     arguments: list[Argument] = field(default_factory=list)
     options: dict[str, Option] = field(default_factory=dict)
     subcommands: dict[str, "Command"] = field(default_factory=dict)
-    # Implicit options live in a separate namespace so they are never
-    # forwarded as kwargs to run(). Each Command gets its own copy so
-    # individual commands can override or extend them in future.
     implicit_options: dict[str, Option] = field(default_factory=dict)
+    version: str | None = None
 
     def __post_init__(self) -> None:
         if not self.implicit_options:
             self.implicit_options = dict(IMPLICIT_OPTIONS)
+
+    def _format_option_label(self, name: str, option: Option) -> str:
+        """Format an option name with its aliases for display."""
+        parts = [f"--{name.replace('_', '-')}"]
+        parts.extend(option.aliases)
+        return ", ".join(parts)
 
     def print_short_help(self) -> None:
         all_options = {**self.implicit_options, **self.options}
@@ -36,14 +40,21 @@ class Command:
             (self.short_description + "\n" if self.short_description else "")
             + f"[b][u]Usage[/u]: {self.name}[/] [OPTIONS]"
             + (" " if self.arguments else "")
-            + " ".join(f"[{x.name.upper()}]" for x in self.arguments)
+            + " ".join(
+                f"[{x.name.upper()}{'...' if x.variadic else ''}]"
+                for x in self.arguments
+            )
             + "\n\n"
         )
 
+        option_labels = {
+            name: self._format_option_label(name, opt)
+            for name, opt in all_options.items()
+        }
         pad_length = max(
             *(len(x.name) for x in self.arguments),
             *map(len, self.subcommands),
-            *(len(x) + 2 for x in all_options),
+            *(len(label) for label in option_labels.values()),
             0,
         )
         if self.subcommands:
@@ -62,7 +73,9 @@ class Command:
                 "[b][u]Arguments[/u]:[/]\n"
                 + "\n".join(
                     " " * INITIAL_LEFT_PADDING
-                    + f"[b][{x.name}][/b]".ljust(pad_length + NAME_DESC_PADDING)
+                    + f"[b][{x.name}{'...' if x.variadic else ''}][/b]".ljust(
+                        pad_length + NAME_DESC_PADDING
+                    )
                     + f"[i]{x.description}[/]"
                     for x in self.arguments
                 )
@@ -74,7 +87,7 @@ class Command:
             + "\n".join(
                 "[b]"
                 + " " * INITIAL_LEFT_PADDING
-                + ("--" + name).ljust(pad_length + NAME_DESC_PADDING)
+                + option_labels[name].ljust(pad_length + NAME_DESC_PADDING)
                 + f"[/b][i]{opt.description}[/]"
                 for name, opt in all_options.items()
             )
@@ -88,7 +101,10 @@ class Command:
             (self.description + "\n" if self.short_description else "")
             + f"[b][u]Usage[/u]: {self.name}[/] [OPTIONS]"
             + (" " if self.arguments else "")
-            + " ".join(f"[{x.name.upper()}]" for x in self.arguments)
+            + " ".join(
+                f"[{x.name.upper()}{'...' if x.variadic else ''}]"
+                for x in self.arguments
+            )
             + "\n\n"
         )
         if self.subcommands:
@@ -104,16 +120,16 @@ class Command:
             help_text += (
                 "[b][u]Arguments[/u]:[/]\n"
                 + "\n".join(
-                    f"[b]{' ' * INITIAL_LEFT_PADDING}[{x.name}][/]\n{textwrap.indent(x.description, '      ')}"
+                    f"[b]{' ' * INITIAL_LEFT_PADDING}[{x.name}{'...' if x.variadic else ''}][/]\n{textwrap.indent(x.description, '      ')}"
                     for x in self.arguments
                 )
                 + "\n\n"
             )
-        # TODO: Aliases
         help_text += (
             "[b][u]Options[/u]:[/]\n"
             + "\n".join(
-                f"{' ' * INITIAL_LEFT_PADDING}[b]--{name}[/]{' ' * NAME_DESC_PADDING}[i]{opt.description}[/]"
+                f"{' ' * INITIAL_LEFT_PADDING}[b]{self._format_option_label(name, opt)}[/]"
+                f"{' ' * NAME_DESC_PADDING}[i]{opt.description}[/]"
                 for name, opt in all_options.items()
             )
             + "\n\n"
@@ -132,17 +148,47 @@ class Command:
         return self.description.split("\n")[0]
 
 
+def _auto_alias(name: str, taken: set[str]) -> list[str]:
+    """Try to auto-generate a single-char short alias for an option name."""
+    for char in name:
+        alias = f"-{char}"
+        if alias not in taken:
+            taken.add(alias)
+            return [alias]
+    return []
+
+
 def extract_parameters(function: Callable) -> tuple[list[Argument], dict[str, Option]]:
-    # Use Python's type hints to extract arguments and options.
-    # Positional-or-keyword params with no default → positional arguments.
-    # Positional-or-keyword params with a default → --options.
+    """Extract arguments and options from a function's signature."""
     signature = inspect.signature(function, eval_str=True)
     arguments = []
     options = {}
+    # Track taken aliases (implicit options reserve theirs)
+    taken_aliases: set[str] = set()
+    for opt in IMPLICIT_OPTIONS.values():
+        taken_aliases.update(opt.aliases)
+
     for name, parameter in signature.parameters.items():
-        if parameter.kind != parameter.POSITIONAL_OR_KEYWORD:
-            msg = "Positional-only, keyword-only, and variadic parameters are currently unsupported"
+        if parameter.kind == parameter.VAR_POSITIONAL:
+            # *args → variadic positional argument
+            if parameter.annotation is inspect.Parameter.empty:
+                msg = f"Variadic argument {name!r} has no type hint"
+                raise ValueError(msg)
+            converter = annotation2converter(parameter.annotation)
+            if converter is None:
+                msg = "Unsupported type"
+                raise TypeError(msg)
+            arguments.append(Argument(name, converter, NO_DESC, variadic=True))
+            continue
+
+        if parameter.kind in (parameter.VAR_KEYWORD, parameter.POSITIONAL_ONLY, parameter.KEYWORD_ONLY):
+            msg = f"{'**kwargs' if parameter.kind == parameter.VAR_KEYWORD else 'Positional-only and keyword-only'} parameters are currently unsupported"
             raise TypeError(msg)
+
+        if parameter.kind != parameter.POSITIONAL_OR_KEYWORD:
+            msg = "Unsupported parameter kind"
+            raise TypeError(msg)
+
         if name in IMPLICIT_OPTIONS:
             msg = f"Cannot use `{name}` as an argument/option name (overrides an implicit option automatically created by Xclif)"
             raise ValueError(msg)
@@ -157,8 +203,8 @@ def extract_parameters(function: Callable) -> tuple[list[Argument], dict[str, Op
         if is_argument:
             arguments.append(Argument(name, converter, NO_DESC))
         else:
-            # TODO: Auto gen aliases
-            options[name] = Option(name, converter, NO_DESC, parameter.default)
+            aliases = _auto_alias(name, taken_aliases)
+            options[name] = Option(name, converter, NO_DESC, parameter.default, aliases=aliases)
     return arguments, options
 
 
@@ -169,7 +215,6 @@ def command(name: None | str = None) -> Callable[[Callable], Command]:
         if name is not None:
             command_name = name
         elif func.__name__ == "_":
-            # Auto name from module
             command_name = func.__module__.split(".")[-1]
         else:
             command_name = func.__name__
