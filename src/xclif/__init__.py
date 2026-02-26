@@ -9,14 +9,22 @@ from xclif.command import Command, command
 from xclif.definition import Option
 from xclif.importer import get_modules
 
-__all__ = ["Cli", "command"]
+__all__ = ["Cli", "WithConfig", "command"]
 
 
 class WithConfig[T]:
-    def __class_getitem__(cls, item: T | tuple[T, str]) -> type[T]:
-        # For now, as an MVP, WithConfig is not implemented
-        if isinstance(item, tuple):
-            return item[0]
+    """Marker for parameters that can be read from a config file or env var.
+
+    ``name: WithConfig[str]`` expresses intent — the parameter *should* fall back
+    to a config file (TOML/JSON in the OS data dir) or an environment variable
+    when not supplied on the CLI.  This is not yet implemented; the annotation
+    is currently transparent (``WithConfig[str]`` behaves exactly like ``str``).
+
+    Planned priority order: CLI flag > env var > config file > default.
+    See: https://github.com/ThatXliner/xclif/issues/23
+    """
+
+    def __class_getitem__(cls, item: type) -> type:
         return item
 
 
@@ -36,11 +44,12 @@ class Cli:
     version: str | None = None
 
     def __post_init__(self) -> None:
-        def completion_func():
-            return print("TODO: completions") or 0
+        from xclif.completions import make_completions_command
 
-        completion_func.__doc__ = "Install completions for your shell"
-        self.add_command(["completions"], Command("completions", completion_func))
+        # Add completions subcommand
+        self.root_command.subcommands["completions"] = make_completions_command(
+            self.root_command
+        )
 
         # Inject --version as an implicit option on root command only
         self.root_command.implicit_options["version"] = Option(

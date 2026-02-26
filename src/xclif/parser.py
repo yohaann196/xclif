@@ -78,6 +78,11 @@ def _build_alias_map(options: dict[str, Option]) -> dict[str, str]:
     return alias_map
 
 
+def _type_name(converter: type) -> str:
+    """Return a human-readable name for a type converter."""
+    return getattr(converter, "__name__", str(converter))
+
+
 def _suggest_option(name: str, options: dict[str, Option]) -> str | None:
     """Suggest a close match for an unknown option name."""
     candidates = [f"--{n.replace('_', '-')}" for n in options]
@@ -127,7 +132,12 @@ def _parse_token_stream(
                 option = options[name]
                 if option.converter is bool:
                     raise UsageError(f"Boolean flag {name_part!r} does not take a value")
-                parsed_opts[name].append(option.converter(value))
+                try:
+                    parsed_opts[name].append(option.converter(value))
+                except (ValueError, TypeError):
+                    raise UsageError(
+                        f"Invalid value {value!r} for option '--{name.replace('_', '-')}': expected {_type_name(option.converter)}"
+                    )
             else:
                 name = token.removeprefix("--").replace("-", "_")
                 if name not in options:
@@ -141,7 +151,12 @@ def _parse_token_stream(
                     if i + 1 >= len(args):
                         raise UsageError(f"Option {token!r} requires a value")
                     i += 1
-                    parsed_opts[name].append(option.converter(args[i]))
+                    try:
+                        parsed_opts[name].append(option.converter(args[i]))
+                    except (ValueError, TypeError):
+                        raise UsageError(
+                            f"Invalid value {args[i]!r} for option '--{name.replace('_', '-')}': expected {_type_name(option.converter)}"
+                        )
 
         elif token.startswith("-") and len(token) > 1:
             # Short option: -v  or  -n value
@@ -155,7 +170,12 @@ def _parse_token_stream(
                 if i + 1 >= len(args):
                     raise UsageError(f"Option {token!r} requires a value")
                 i += 1
-                parsed_opts[long_name].append(option.converter(args[i]))
+                try:
+                    parsed_opts[long_name].append(option.converter(args[i]))
+                except (ValueError, TypeError):
+                    raise UsageError(
+                        f"Invalid value {args[i]!r} for option '--{long_name.replace('_', '-')}': expected {_type_name(option.converter)}"
+                    )
 
         elif token in subcommands:
             # Subcommand name — stop scanning, hand off tail
@@ -246,14 +266,25 @@ def parse_and_execute_impl(
         raise UsageError(f"Missing required argument(s): {', '.join(missing)}")
 
     # Convert fixed positional args
-    converted_args = [
-        arg.converter(raw) for raw, arg in zip(positionals, fixed_args)
-    ]
+    converted_args = []
+    for raw, arg in zip(positionals, fixed_args):
+        try:
+            converted_args.append(arg.converter(raw))
+        except (ValueError, TypeError):
+            raise UsageError(
+                f"Invalid value {raw!r} for argument '{arg.name}': expected {_type_name(arg.converter)}"
+            )
 
     # Convert variadic remainder
     if variadic_arg:
         remaining = positionals[len(fixed_args) :]
-        converted_args.extend(variadic_arg.converter(raw) for raw in remaining)
+        for raw in remaining:
+            try:
+                converted_args.append(variadic_arg.converter(raw))
+            except (ValueError, TypeError):
+                raise UsageError(
+                    f"Invalid value {raw!r} for argument '{variadic_arg.name}': expected {_type_name(variadic_arg.converter)}"
+                )
 
     # Only user-defined option values go to run()
     user_kwargs: dict = {}

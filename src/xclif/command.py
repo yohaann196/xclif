@@ -53,10 +53,12 @@ class Command:
             for name, opt in all_options.items()
         }
         pad_length = max(
-            *(len(x.name) for x in self.arguments),
-            *map(len, self.subcommands),
-            *(len(label) for label in option_labels.values()),
-            0,
+            [
+                *(len(x.name) for x in self.arguments),
+                *map(len, self.subcommands),
+                *(len(label) for label in option_labels.values()),
+                0,
+            ]
         )
         if self.subcommands:
             help_text += (
@@ -82,7 +84,6 @@ class Command:
                 )
                 + "\n\n"
             )
-        # TODO: Aliases
         help_text += (
             "[b][u]Options[/u]:[/]\n"
             + "\n".join(
@@ -108,20 +109,40 @@ class Command:
             )
             + "\n\n"
         )
+
+        option_labels = {
+            name: self._format_option_label(name, opt)
+            for name, opt in all_options.items()
+        }
+        pad_length = max(
+            [
+                *(len(x.name) for x in self.arguments),
+                *map(len, self.subcommands),
+                *(len(label) for label in option_labels.values()),
+                0,
+            ]
+        )
         if self.subcommands:
             help_text += (
                 "[b][u]Subcommands[/u]:[/]\n"
                 + "\n".join(
-                    f"{' ' * INITIAL_LEFT_PADDING}[b]{name}[/]{' ' * NAME_DESC_PADDING}[i]{cmd.short_description}[/]"
+                    " " * INITIAL_LEFT_PADDING
+                    + f"[b]{name.ljust(pad_length + NAME_DESC_PADDING)}[/]"
+                    + f"[i]{cmd.short_description}[/]"
                     for name, cmd in self.subcommands.items()
                 )
                 + "\n\n"
             )
         elif self.arguments:
+            indent_width = INITIAL_LEFT_PADDING + pad_length + NAME_DESC_PADDING
             help_text += (
                 "[b][u]Arguments[/u]:[/]\n"
                 + "\n".join(
-                    f"[b]{' ' * INITIAL_LEFT_PADDING}[{x.name}{'...' if x.variadic else ''}][/]\n{textwrap.indent(x.description, '      ')}"
+                    " " * INITIAL_LEFT_PADDING
+                    + f"[b][{x.name}{'...' if x.variadic else ''}][/b]".ljust(
+                        pad_length + NAME_DESC_PADDING
+                    )
+                    + textwrap.indent(x.description, " " * indent_width).strip()
                     for x in self.arguments
                 )
                 + "\n\n"
@@ -129,8 +150,10 @@ class Command:
         help_text += (
             "[b][u]Options[/u]:[/]\n"
             + "\n".join(
-                f"{' ' * INITIAL_LEFT_PADDING}[b]{self._format_option_label(name, opt)}[/]"
-                f"{' ' * NAME_DESC_PADDING}[i]{opt.description}[/]"
+                "[b]"
+                + " " * INITIAL_LEFT_PADDING
+                + option_labels[name].ljust(pad_length + NAME_DESC_PADDING)
+                + f"[/b][i]{opt.description}[/]"
                 for name, opt in all_options.items()
             )
             + "\n\n"

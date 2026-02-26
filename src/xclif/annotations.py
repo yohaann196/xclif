@@ -1,4 +1,3 @@
-import types
 from typing import Callable, get_args, get_origin
 
 type ScalarParameterTypes = str | int | float | bool
