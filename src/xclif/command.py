@@ -6,9 +6,10 @@ from typing import Callable
 
 import rich
 
-from xclif.annotations import annotation2converter
+from xclif.annotations import annotation2converter, is_list_type
 from xclif.constants import INITIAL_LEFT_PADDING, NAME_DESC_PADDING, NO_DESC
 from xclif.definition import IMPLICIT_OPTIONS, Argument, Option
+from xclif.errors import UsageError
 from xclif.parser import parse_and_execute_impl
 
 
@@ -137,7 +138,13 @@ class Command:
         rich.print(help_text)
 
     def execute(self, args: list[str] | None = None) -> int:
-        return parse_and_execute_impl(sys.argv[1:] if args is None else args, self)
+        try:
+            return parse_and_execute_impl(sys.argv[1:] if args is None else args, self)
+        except UsageError as exc:
+            rich.print(f"[bold red]Error:[/bold red] {exc}", file=sys.stderr)
+            if exc.hint:
+                rich.print(f"[dim]{exc.hint}[/dim]", file=sys.stderr)
+            return 2
 
     @property
     def description(self) -> str:
@@ -200,11 +207,13 @@ def extract_parameters(function: Callable) -> tuple[list[Argument], dict[str, Op
             msg = "Unsupported type"
             raise TypeError(msg)
         is_argument = parameter.default is inspect.Parameter.empty
+        list_valued = is_list_type(parameter.annotation)
         if is_argument:
             arguments.append(Argument(name, converter, NO_DESC))
         else:
+            default = parameter.default
             aliases = _auto_alias(name, taken_aliases)
-            options[name] = Option(name, converter, NO_DESC, parameter.default, aliases=aliases)
+            options[name] = Option(name, converter, NO_DESC, default, is_list=list_valued, aliases=aliases)
     return arguments, options
 
 

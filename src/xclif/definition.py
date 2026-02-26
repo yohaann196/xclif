@@ -23,6 +23,7 @@ class Option[T]:
     description: str
     default: Any = None
     cascading: bool = False
+    is_list: bool = False
     aliases: list[str] = field(default_factory=list)
 
     @property

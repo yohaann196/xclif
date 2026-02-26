@@ -1,9 +1,69 @@
+"""Xclif argument parser.
+
+Parsing algorithm
+=================
+
+Xclif uses a **recursive-descent, single-pass** parser that walks the token
+stream left to right. Parsing happens in two cooperating layers:
+
+1. **Token scanning** (`_parse_token_stream`) — a single command level.
+2. **Recursive dispatch** (`parse_and_execute_impl`) — the full command tree.
+
+Token scanning
+--------------
+At each command level the scanner classifies every token:
+
+    --name value   → long option (space form)
+    --name=value   → long option (equals form)
+    -x             → short alias (looked up in the alias map)
+    --             → sentinel; everything after is a raw positional
+    <subcommand>   → stops scanning; returns the index so the caller can recurse
+    <anything else> → positional argument
+
+Options and positionals may be **interspersed** — options are collected
+regardless of their position relative to positional tokens. Boolean flags
+consume no following token; value options greedily consume the next token
+(even if it happens to match a subcommand name).
+
+Recursive dispatch
+------------------
+`parse_and_execute_impl` is called once per command level:
+
+1. Merge implicit options (--help, --verbose, etc.) with user-defined options.
+2. Run `_parse_token_stream` to separate positionals, options, and detect a
+   subcommand boundary.
+3. Handle implicit options first (--help prints help and exits; --version
+   prints version and exits).
+4. Build the **cascading context** — implicit options marked ``cascading=True``
+   propagate their values down the command tree.
+5. **Dispatch:**
+   - If a subcommand was found, recurse into it with the remaining tokens.
+   - If no subcommand and no positionals/user-opts, print short help (namespace
+     default).
+   - Otherwise, bind positionals to declared arguments (fixed + variadic),
+     resolve option defaults, and call ``command.run()``.
+
+Error handling
+--------------
+All user-facing parse errors raise `UsageError`. When invoked via
+`Command.execute`, these are caught, formatted with Rich, and printed to
+stderr with exit code 2. Edit-distance suggestions are provided for unknown
+options and subcommands.
+
+List options
+------------
+Options annotated as ``list[T]`` (e.g. ``list[str]``) collect all
+occurrences into a list. Repeated ``--tag a --tag b`` produces ``["a", "b"]``.
+Single occurrences still produce a one-element list (never unwrapped).
+"""
 from __future__ import annotations
 
 from collections import defaultdict
+from difflib import get_close_matches
 from typing import TYPE_CHECKING
 
 from xclif.definition import Option
+from xclif.errors import UsageError
 
 if TYPE_CHECKING:
     from xclif.command import Command
@@ -16,6 +76,13 @@ def _build_alias_map(options: dict[str, Option]) -> dict[str, str]:
         for alias in option.aliases:
             alias_map[alias] = long_name
     return alias_map
+
+
+def _suggest_option(name: str, options: dict[str, Option]) -> str | None:
+    """Suggest a close match for an unknown option name."""
+    candidates = [f"--{n.replace('_', '-')}" for n in options]
+    matches = get_close_matches(name, candidates, n=1, cutoff=0.6)
+    return matches[0] if matches else None
 
 
 def _parse_token_stream(
@@ -53,44 +120,40 @@ def _parse_token_stream(
             if "=" in token:
                 name_part, value = token.split("=", 1)
                 name = name_part.removeprefix("--").replace("-", "_")
-                try:
-                    option = options[name]
-                except KeyError as err:
-                    msg = f"Unknown option {name_part!r}"
-                    raise RuntimeError(msg) from err
+                if name not in options:
+                    suggestion = _suggest_option(name_part, options)
+                    hint = f"Did you mean '{suggestion}'?" if suggestion else None
+                    raise UsageError(f"Unknown option {name_part!r}", hint=hint)
+                option = options[name]
                 if option.converter is bool:
-                    msg = f"Boolean flag {name_part!r} does not take a value"
-                    raise RuntimeError(msg)
+                    raise UsageError(f"Boolean flag {name_part!r} does not take a value")
                 parsed_opts[name].append(option.converter(value))
             else:
                 name = token.removeprefix("--").replace("-", "_")
-                try:
-                    option = options[name]
-                except KeyError as err:
-                    msg = f"Unknown option {token!r}"
-                    raise RuntimeError(msg) from err
+                if name not in options:
+                    suggestion = _suggest_option(token, options)
+                    hint = f"Did you mean '{suggestion}'?" if suggestion else None
+                    raise UsageError(f"Unknown option {token!r}", hint=hint)
+                option = options[name]
                 if option.converter is bool:
                     parsed_opts[name].append(True)
                 else:
                     if i + 1 >= len(args):
-                        msg = f"Option {token!r} requires a value"
-                        raise RuntimeError(msg)
+                        raise UsageError(f"Option {token!r} requires a value")
                     i += 1
                     parsed_opts[name].append(option.converter(args[i]))
 
         elif token.startswith("-") and len(token) > 1:
             # Short option: -v  or  -n value
             if token not in alias_map:
-                msg = f"Unknown option {token!r}"
-                raise RuntimeError(msg)
+                raise UsageError(f"Unknown option {token!r}")
             long_name = alias_map[token]
             option = options[long_name]
             if option.converter is bool:
                 parsed_opts[long_name].append(True)
             else:
                 if i + 1 >= len(args):
-                    msg = f"Option {token!r} requires a value"
-                    raise RuntimeError(msg)
+                    raise UsageError(f"Option {token!r} requires a value")
                 i += 1
                 parsed_opts[long_name].append(option.converter(args[i]))
 
@@ -167,7 +230,10 @@ def parse_and_execute_impl(
         return 0
 
     if command.subcommands and positionals:
-        raise RuntimeError(f"Unknown subcommand {positionals[0]!r}")
+        candidates = list(command.subcommands)
+        matches = get_close_matches(positionals[0], candidates, n=1, cutoff=0.6)
+        hint = f"Did you mean '{matches[0]}'?" if matches else None
+        raise UsageError(f"Unknown subcommand {positionals[0]!r}", hint=hint)
 
     # Leaf command: assign positionals and call run()
     declared_args = command.arguments
@@ -177,8 +243,7 @@ def parse_and_execute_impl(
     # Check required fixed args are present
     if len(positionals) < len(fixed_args):
         missing = [a.name for a in fixed_args[len(positionals) :]]
-        msg = f"Missing required argument(s): {', '.join(missing)}"
-        raise RuntimeError(msg)
+        raise UsageError(f"Missing required argument(s): {', '.join(missing)}")
 
     # Convert fixed positional args
     converted_args = [
@@ -195,7 +260,10 @@ def parse_and_execute_impl(
     for name, option in command.options.items():
         if name in parsed_opts:
             values = parsed_opts[name]
-            user_kwargs[name] = values if len(values) > 1 else values[0]
+            if option.is_list:
+                user_kwargs[name] = values
+            else:
+                user_kwargs[name] = values if len(values) > 1 else values[0]
         elif option.default is not None:
             user_kwargs[name] = option.default
 

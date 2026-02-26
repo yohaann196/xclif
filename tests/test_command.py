@@ -287,3 +287,37 @@ def test_bool_option():
     def f(dry_run: bool = False) -> None: ...
     args, opts = extract_parameters(f)
     assert opts["dry_run"].converter is bool
+
+
+# ---------------------------------------------------------------------------
+# extract_parameters — list[T] types
+# ---------------------------------------------------------------------------
+
+
+def test_list_str_option():
+    def f(tags: list[str] = []) -> None: ...
+    args, opts = extract_parameters(f)
+    assert "tags" in opts
+    assert opts["tags"].is_list is True
+    assert opts["tags"].converter is str
+    assert opts["tags"].default == []
+
+
+def test_list_int_option():
+    def f(counts: list[int] = []) -> None: ...
+    args, opts = extract_parameters(f)
+    assert opts["counts"].is_list is True
+    assert opts["counts"].converter is int
+
+
+def test_list_float_option():
+    def f(rates: list[float] = []) -> None: ...
+    args, opts = extract_parameters(f)
+    assert opts["rates"].is_list is True
+    assert opts["rates"].converter is float
+
+
+def test_non_list_option_is_not_list():
+    def f(name: str = "default") -> None: ...
+    args, opts = extract_parameters(f)
+    assert opts["name"].is_list is False

@@ -4,6 +4,7 @@ import pytest
 
 from xclif.command import Command
 from xclif.definition import Argument, Option
+from xclif.errors import UsageError
 from xclif.parser import _parse_token_stream, parse_and_execute_impl
 
 
@@ -97,12 +98,12 @@ def test_equals_form_value_with_equals():
 
 
 def test_equals_form_bool_raises():
-    with pytest.raises(RuntimeError, match="does not take a value"):
+    with pytest.raises(UsageError, match="does not take a value"):
         _parse_token_stream(_bool_opts("verbose"), {}, ["--verbose=true"])
 
 
 def test_equals_form_unknown_raises():
-    with pytest.raises(RuntimeError, match="Unknown option"):
+    with pytest.raises(UsageError, match="Unknown option"):
         _parse_token_stream({}, {}, ["--nope=val"])
 
 
@@ -136,13 +137,13 @@ def test_short_mixed_with_long():
 
 
 def test_short_unknown_raises():
-    with pytest.raises(RuntimeError, match="Unknown option"):
+    with pytest.raises(UsageError, match="Unknown option"):
         _parse_token_stream({}, {}, ["-x"])
 
 
 def test_short_value_missing_raises():
     opts = {"name": _opt("name", str, aliases=["-n"])}
-    with pytest.raises(RuntimeError, match="requires a value"):
+    with pytest.raises(UsageError, match="requires a value"):
         _parse_token_stream(opts, {}, ["-n"])
 
 
@@ -238,12 +239,12 @@ def test_second_token_invokes_subcommand_after_greedy_consumption():
 
 
 def test_unknown_long_option_raises():
-    with pytest.raises(RuntimeError, match="Unknown option"):
+    with pytest.raises(UsageError, match="Unknown option"):
         _parse_token_stream({}, {}, ["--nope"])
 
 
 def test_value_option_missing_value_raises():
-    with pytest.raises(RuntimeError, match="requires a value"):
+    with pytest.raises(UsageError, match="requires a value"):
         _parse_token_stream(_str_opts("name"), {}, ["--name"])
 
 
@@ -297,7 +298,7 @@ def test_leaf_option_default_used():
 
 def test_leaf_missing_required_arg_raises():
     cmd = Command("test", lambda name: None, arguments=[Argument("name", str, "desc")])
-    with pytest.raises(RuntimeError, match="Missing required argument"):
+    with pytest.raises(UsageError, match="Missing required argument"):
         parse_and_execute_impl([], cmd)
 
 
@@ -450,7 +451,7 @@ def test_version_flag_prints_and_returns_zero(capsys):
 def test_version_flag_unknown_when_not_root(capsys):
     cmd = Command("myapp", lambda: 0)
     # No version injected → --version should be unknown
-    with pytest.raises(RuntimeError, match="Unknown option"):
+    with pytest.raises(UsageError, match="Unknown option"):
         parse_and_execute_impl(["--version"], cmd)
 
 
@@ -494,5 +495,95 @@ def test_namespace_no_args_prints_help(capsys):
 def test_unknown_subcommand_raises():
     child = Command("sub", lambda: 0)
     parent = Command("parent", lambda: 0, subcommands={"sub": child})
-    with pytest.raises(RuntimeError, match="Unknown subcommand"):
+    with pytest.raises(UsageError, match="Unknown subcommand"):
         parse_and_execute_impl(["doesnotexist"], parent)
+
+
+# ---------------------------------------------------------------------------
+# UsageError — hint / suggestion
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_option_has_suggestion_hint():
+    opts = _str_opts("name")
+    with pytest.raises(UsageError) as exc_info:
+        _parse_token_stream(opts, {}, ["--nme"])
+    assert exc_info.value.hint is not None
+    assert "--name" in exc_info.value.hint
+
+
+def test_unknown_option_no_hint_when_no_match():
+    opts = _str_opts("name")
+    with pytest.raises(UsageError) as exc_info:
+        _parse_token_stream(opts, {}, ["--zzzzz"])
+    assert exc_info.value.hint is None
+
+
+def test_unknown_subcommand_has_suggestion_hint():
+    child = Command("greet", lambda: 0)
+    parent = Command("parent", lambda: 0, subcommands={"greet": child})
+    with pytest.raises(UsageError) as exc_info:
+        parse_and_execute_impl(["gret"], parent)
+    assert exc_info.value.hint is not None
+    assert "greet" in exc_info.value.hint
+
+
+# ---------------------------------------------------------------------------
+# parse_and_execute_impl — list options
+# ---------------------------------------------------------------------------
+
+
+def test_list_option_single_value():
+    received = {}
+
+    def run(tags: list[str] = []) -> None:
+        received["tags"] = tags
+
+    cmd = Command(
+        "test", run,
+        options={"tags": Option("tags", str, "desc", [], is_list=True)},
+    )
+    parse_and_execute_impl(["--tags", "a"], cmd)
+    assert received["tags"] == ["a"]
+
+
+def test_list_option_multiple_values():
+    received = {}
+
+    def run(tags: list[str] = []) -> None:
+        received["tags"] = tags
+
+    cmd = Command(
+        "test", run,
+        options={"tags": Option("tags", str, "desc", [], is_list=True)},
+    )
+    parse_and_execute_impl(["--tags", "a", "--tags", "b", "--tags", "c"], cmd)
+    assert received["tags"] == ["a", "b", "c"]
+
+
+def test_list_option_default_empty():
+    received = {}
+
+    def run(tags: list[str] = []) -> None:
+        received["tags"] = tags
+
+    cmd = Command(
+        "test", run,
+        options={"tags": Option("tags", str, "desc", [], is_list=True)},
+    )
+    parse_and_execute_impl([], cmd)
+    assert received["tags"] == []
+
+
+# ---------------------------------------------------------------------------
+# Command.execute — UsageError caught and formatted
+# ---------------------------------------------------------------------------
+
+
+def test_execute_catches_usage_error(capsys):
+    cmd = Command("test", lambda name: None, arguments=[Argument("name", str, "desc")])
+    result = cmd.execute([])
+    assert result == 2
+    err = capsys.readouterr().err
+    assert "Error" in err
+    assert "Missing required argument" in err

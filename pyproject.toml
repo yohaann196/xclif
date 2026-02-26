@@ -1,15 +1,29 @@
 [project]
 name = "xclif"
 version = "0.1.0"
-description = "Add your description here"
+description = "Xliner's CLI Framework"
 readme = "README.md"
+license = "GPL-3.0-or-later"
 authors = [
-    { name = "ThatXliner", email = "bryan.hu.2020@gmail.com" }
+    { name = "Bryan Hu", email = "thatxliner@gmail.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
     "rich>=14.0.0",
 ]
+classifiers = [
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Typing :: Typed",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "Natural Language :: English",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+]
+
+[project.urls]
+Homepage = "https://github.com/ThatXliner/xclif"
+Documentation = "https://xclif.readthedocs.io/en/latest/index.html"
+Repository = "https://github.com/ThatXliner/xclif"
 
 [build-system]
 requires = ["hatchling"]

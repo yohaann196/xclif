@@ -71,9 +71,10 @@ def test_greet_help_returns_zero(root, capsys):
     assert result == 0
 
 
-def test_greet_unknown_option_raises(root):
-    with pytest.raises(RuntimeError, match="Unknown option"):
-        root.execute(["greet", "Alice", "--nonexistent"])
+def test_greet_unknown_option_returns_error(root, capsys):
+    result = root.execute(["greet", "Alice", "--nonexistent"])
+    assert result == 2
+    assert "Unknown option" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
@@ -96,9 +97,10 @@ def test_config_get_executes(root):
     assert result == 0
 
 
-def test_unknown_subcommand_raises(root):
-    with pytest.raises(RuntimeError, match="[Uu]nknown"):
-        root.execute(["doesnotexist"])
+def test_unknown_subcommand_returns_error(root, capsys):
+    result = root.execute(["doesnotexist"])
+    assert result == 2
+    assert "Unknown" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +155,8 @@ def test_version_on_root(cli, capsys):
     assert result == 0
 
 
-def test_version_not_on_subcommand(root):
+def test_version_not_on_subcommand(root, capsys):
     """--version should not be recognized on subcommands."""
-    with pytest.raises(RuntimeError, match="Unknown option"):
-        root.execute(["greet", "--version", "Alice"])
+    result = root.execute(["greet", "--version", "Alice"])
+    assert result == 2
+    assert "Unknown option" in capsys.readouterr().err

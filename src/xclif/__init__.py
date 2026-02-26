@@ -12,9 +12,7 @@ from xclif.importer import get_modules
 __all__ = ["Cli", "command"]
 
 
-# TODO: Perhaps Configs could be annotated?
 class WithConfig[T]:
-    # TODO: polymorphism? file configs? env configs??
     def __class_getitem__(cls, item: T | tuple[T, str]) -> type[T]:
         # For now, as an MVP, WithConfig is not implemented
         if isinstance(item, tuple):
@@ -60,7 +58,7 @@ class Cli:
                 msg = "Cannot add subcommands to a command with arguments"
                 raise ValueError(msg)
             cursor = cursor.subcommands.setdefault(
-                part, Command(part, lambda self: self.print_short_help() or 0)
+                part, Command(part, lambda: 0)
             )
         cursor.subcommands[command.name] = command
 
