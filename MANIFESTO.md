@@ -1,22 +1,24 @@
-# The XClif Manifesto
+# The Xclif Manifesto
 
-## The Problem With CLI Frameworks
+## CLI frameworks are good, actually
 
-Building a CLI in Python today means choosing your poison:
+Click and Typer are excellent tools. If you're building a script with a handful of flags, they're the right choice. Decorator-based, ergonomic, and mature — there's a reason the Python ecosystem converged on them.
 
-- **argparse** — You write parsers by hand, wiring up subparsers to subparsers. Your command tree is scattered across setup code that has nothing to do with logic.
-- **Click** — Decorator-based, better, but you still manually assemble the hierarchy. Every command needs `@group.command()`. Subcommand groups are separate objects you have to nest and register.
-- **Typer** — Built on Click, so it inherits the same organizational model. Better type inference, but also incredibly slow.
+But CLIs have gotten more ambitious. `git`, `cargo`, `poetry`, `kubectl`, `gh` — these aren't scripts. They're structured command hierarchies, sometimes dozens of subcommands deep, each with their own arguments and options. Building something at that scale with Click or Typer reveals a different class of problem: not the API itself, but the organizational model underneath it.
 
-All of these share a fundamental flaw: **the structure of your CLI is defined in code, not in your project layout.** When your app grows, you end up with giant `cli.py` files, or sprawling import chains manually stitching together subcommands. The file tree of your project and the command tree of your CLI are two completely separate things you have to keep in sync yourself.
+## The problem at scale
 
-There's a better way. We've already seen it — in web frameworks.
+When your CLI grows, these frameworks ask you to do the same thing a web developer did before routing frameworks existed: manually assemble the structure.
 
-## The Insight: Routing
+With Click you write `@cli.group()`, then `@group.command()`, then you import everything into one place and wire it up. With Typer it's similar — you create `app = typer.Typer()`, then `sub = typer.Typer()`, then `app.add_typer(sub)`. Your command tree ends up scattered across files, or collapsed into a single massive `cli.py`. The shape of your CLI and the shape of your codebase are two separate things you're responsible for keeping in sync.
 
-Next.js, FastAPI, Rails — they all solved this same organizational problem for web apps. The key insight: **your directory structure is your route map.** A file at `routes/config/set.py` is the handler for `config set`. You don't register it. It just is.
+This is exactly the problem web frameworks solved with routing.
 
-XClif brings this insight to CLI development.
+## The insight from web development
+
+When FastAPI or Next.js or Rails arrived, they didn't just give you a better API for writing handlers. They changed the organizational model: **the directory structure is the route map**. A file at `routes/users/settings.py` *is* the `/users/settings` handler. You don't register it. The framework discovers it.
+
+That's what CLIs have been missing.
 
 ```
 myapp/
@@ -33,9 +35,7 @@ No registration. No boilerplate assembly. Drop a file in the right folder and th
 
 ## The API
 
-The other half of XClif is what goes *inside* those files.
-
-You write a function. You annotate it. XClif reads the annotations and builds the command for you.
+The other half is what goes *inside* those files. You write a function, annotate it, and Xclif builds the command from the signature.
 
 ```python
 # routes/greet.py
@@ -55,25 +55,40 @@ That's it. `name` has no default → it's a positional argument. `template` has 
 The command tree mirrors the file tree. A developer reading the filesystem should immediately understand the CLI's surface area.
 
 **2. Functions are commands.**
-A command is just a function. Its signature is its interface. No special CLI objects, no wrapper classes.
+A command is just a Python function. Its signature is its interface.
 
 **3. Types do the work.**
-Python type annotations already express what a parameter is. XClif reads them to handle conversion, validation, and help text — without you specifying anything twice.
+Annotations already express what a parameter is. Xclif reads them — no separate `help=` strings, no `metavar=`, no duplicate declarations.
 
 **4. Zero boilerplate at the entry point.**
-Your `__main__.py` should be three lines. `Cli.from_routes(routes)` and you're done.
+Your `__main__.py` is three lines. `Cli.from_routes(routes)` and you're done.
 
-**5. Escape hatches exist.**
-The filesystem convention is the happy path, not a prison. You can always reach for the lower-level `Command` and `Cli` objects directly when you need to.
+**5. Fast by default.**
+Python CLI startup time is a real problem — Typer can add hundreds of milliseconds before your command even runs. Xclif is designed to stay lean. We don't import what we don't need.
 
-## What XClif Is Not
+**6. Escape hatches exist.**
+The filesystem convention is the happy path, not a prison. The lower-level `Command` and `Cli` objects are always available when you need to go off-script.
 
-XClif is not trying to replace every CLI framework for every use case. If you have a single-command script with three flags, use argparse. XClif is for **structured, multi-command CLIs** — the kind where the organizational model matters, where you want `myapp config set` and `myapp config get` and `myapp env use` without spending time on plumbing.
+## The integrated framework
 
-It is also not a kitchen sink. XClif will not bundle a logging framework, a plugin system, a configuration management library, or a database ORM. It does one thing: **turn a folder of functions into a CLI.**
+Xclif's ambition goes beyond routing. The goal is to be the integrated framework for serious Python CLIs — the thing you reach for when you want a complete, professional-grade tool without assembling twenty libraries yourself.
 
-## The Goal
+That means batteries included, but not batteries bloated. Xclif ships with:
 
-The best CLIs feel inevitable. The commands are where you expect them, the options do what you think, the help text tells you what you need. XClif's goal is to make building that kind of CLI the path of least resistance — so you spend your time on logic, not scaffolding.
+- **Rich output** — beautiful help text, formatted errors, progress indicators, all built in
+- **Config management** — the `WithConfig[T]` annotation lets any parameter read from a config file or environment variable, with a clear priority order: CLI flag > env var > config file > default
+- **Logging** — `--verbose` / `-v` is wired up automatically; your commands get a structured logger with verbosity levels for free
+
+These aren't afterthoughts bolted on. They're designed as part of the same system, so they compose correctly and don't fight each other.
+
+The architecture is plugin-based under the hood — so the core stays lean, startup stays fast, and the framework stays extensible. You can swap implementations or add your own. But you shouldn't have to for the common cases.
+
+## What Xclif is not for
+
+Xclif is not the right tool for a single-command script with three flags. Click or argparse will get you there faster with less overhead. Xclif is for **structured, multi-command CLIs** — the kind where the organizational model matters and where you want the full stack working together out of the box.
+
+## The goal
+
+The best CLIs feel inevitable. The commands are where you expect them, the options do what you think, the help text is actually useful. Xclif's goal is to make building that kind of CLI the path of least resistance.
 
 Ship the CLI you meant to build.
