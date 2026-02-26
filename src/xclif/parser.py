@@ -1,7 +1,6 @@
 # import shlex
 
 from collections import defaultdict
-from enum import KEEP
 from typing import TYPE_CHECKING, Callable
 
 from xclif.definition import Argument, Option
@@ -14,26 +13,6 @@ def flatten_dict_values[T](d: dict[str, list[T]]) -> dict[str, T | list[T]]:
     return {k: v if len(v) > 1 else v[0] for k, v in d.items()}
 
 
-# def parse_option(options: dict[str, Option], arg: str):
-#     if arg.startswith("-"):
-#         # TODO: Parse options
-#         if arg == "--":
-#             msg = "We have not implemented the -- thing yet"
-#             raise NotImplementedError(msg)
-#             # SECURITY: or shlex.join????
-#             # parsed_arguments.append(" ".join(args[i + 1 :]))
-#             # break
-#         if arg.startswith("--"):
-#             snake_case = arg.removeprefix("--").replace("-", "_")
-#             return options[snake_case].converter(arg)
-#         else:
-#             # TODO: get alias
-#             msg = "Short options are not implemented yet"
-#             raise NotImplementedError(msg)
-#     else:
-#         # Error: unexpected argument
-#         msg = f"Unexpected argument {arg}"
-#         raise RuntimeError(msg)
 type _ParsedOptions[T] = dict[str, list[T]]
 
 
@@ -43,22 +22,24 @@ def parse_options[T](options: dict[str, Option], args: list[str]) -> _ParsedOpti
     while i < len(args):
         arg = args[i]
         if arg.startswith("-"):
-            # TODO: Parse options
             if arg == "--":
                 msg = "We have not implemented the -- thing yet"
                 raise NotImplementedError(msg)
-                # SECURITY: or shlex.join????
-                # parsed_arguments.append(" ".join(args[i + 1 :]))
-                break
             if arg.startswith("--"):
                 snake_case = arg.removeprefix("--").replace("-", "_")
                 try:
-                    parsed_options[snake_case].append(
-                        options[snake_case].converter(arg)
-                    )
+                    option = options[snake_case]
                 except KeyError as err:
                     msg = f"Unknown option {arg}"
                     raise RuntimeError(msg) from err
+                if option.converter is bool:
+                    parsed_options[snake_case].append(True)
+                else:
+                    if i + 1 >= len(args):
+                        msg = f"Option {arg} requires a value"
+                        raise RuntimeError(msg)
+                    i += 1
+                    parsed_options[snake_case].append(option.converter(args[i]))
             else:
                 # TODO: get alias
                 msg = "Short options are not implemented yet"
@@ -107,25 +88,24 @@ def parse_and_execute_impl(
     while i < len(args):
         arg = args[i]
         if arg.startswith("-"):
-            # TODO: Parse options
             if arg == "--":
                 msg = "We have not implemented the -- thing yet"
                 raise NotImplementedError(msg)
-                # SECURITY: or shlex.join????
-                # parsed_arguments.append(" ".join(args[i + 1 :]))
-                break
             if arg.startswith("--"):
                 snake_case = arg.removeprefix("--").replace("-", "_")
                 try:
-                    parsed_options[snake_case].append(
-                        options[snake_case].converter(arg)
-                    )
+                    option = options[snake_case]
                 except KeyError as err:
                     msg = f"Unknown option {arg}"
-                    # TODO: Better error handling (so we can differentiate
-                    # between errors in the user (of the CLI) and errors in
-                    # the users of the framework itself)
                     raise RuntimeError(msg) from err
+                if option.converter is bool:
+                    parsed_options[snake_case].append(True)
+                else:
+                    if i + 1 >= len(args):
+                        msg = f"Option {arg} requires a value"
+                        raise RuntimeError(msg)
+                    i += 1
+                    parsed_options[snake_case].append(option.converter(args[i]))
             else:
                 # TODO: get alias
                 msg = "Short options are not implemented yet"

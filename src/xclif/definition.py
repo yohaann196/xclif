@@ -25,7 +25,7 @@ class Option[T]:
     name: str
     converter: Callable[[Any], T]
     description: str
-    default: None | str = None  # XXX: may not be necessary
+    default: Any = None
 
     @property
     def short_description(self) -> str:
