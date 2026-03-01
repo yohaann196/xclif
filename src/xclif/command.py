@@ -4,13 +4,16 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import Callable
 
-import rich
-
 from xclif.annotations import annotation2converter, is_list_type
 from xclif.constants import INITIAL_LEFT_PADDING, NAME_DESC_PADDING, NO_DESC
 from xclif.definition import IMPLICIT_OPTIONS, Argument, Option
 from xclif.errors import UsageError
 from xclif.parser import parse_and_execute_impl
+
+
+def _rprint(*args, **kwargs) -> None:
+    import rich
+    rich.print(*args, **kwargs)
 
 
 @dataclass
@@ -95,7 +98,7 @@ class Command:
             )
             + "\n\n"
         )
-        rich.print(help_text)
+        _rprint(help_text)
 
     def print_long_help(self) -> None:
         all_options = {**self.implicit_options, **self.options}
@@ -158,15 +161,15 @@ class Command:
             )
             + "\n\n"
         )
-        rich.print(help_text)
+        _rprint(help_text)
 
     def execute(self, args: list[str] | None = None) -> int:
         try:
             return parse_and_execute_impl(sys.argv[1:] if args is None else args, self)
         except UsageError as exc:
-            rich.print(f"[bold red]Error:[/bold red] {exc}", file=sys.stderr)
+            _rprint(f"[bold red]Error:[/bold red] {exc}", file=sys.stderr)
             if exc.hint:
-                rich.print(f"[dim]{exc.hint}[/dim]", file=sys.stderr)
+                _rprint(f"[dim]{exc.hint}[/dim]", file=sys.stderr)
             return 2
 
     @property
