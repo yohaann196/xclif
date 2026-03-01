@@ -32,6 +32,13 @@ class Command:
         if not self.implicit_options:
             self.implicit_options = dict(IMPLICIT_OPTIONS)
 
+    def _assert_no_arguments(self, *, adding: str) -> None:
+        if self.arguments:
+            raise ValueError(
+                f"Cannot add subcommand {adding!r} to command {self.name!r}: "
+                "commands with positional arguments cannot have subcommands"
+            )
+
     def _format_option_label(self, name: str, option: Option) -> str:
         """Format an option name with its aliases for display."""
         parts = [f"--{name.replace('_', '-')}"]

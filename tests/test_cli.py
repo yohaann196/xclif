@@ -60,11 +60,36 @@ def test_cli_add_command_creates_intermediate_namespace():
 
 def test_cli_add_command_to_command_with_arguments_raises():
     @command()
-    def root(name: str) -> None: ...
+    def root() -> None: ...
+
+    @command()
+    def intermediate(name: str) -> None: ...
 
     cli = Cli(root_command=root)
-    with pytest.raises(ValueError, match="Cannot add subcommands"):
-        cli.add_command(["name", "sub"], Command("sub", lambda: 0))
+    cli.root_command.subcommands["intermediate"] = intermediate
+    with pytest.raises(ValueError, match="Cannot add subcommand"):
+        cli.add_command(["intermediate", "sub"], Command("sub", lambda: 0))
+
+
+def test_cli_add_command_direct_to_root_with_arguments_raises():
+    @command()
+    def root() -> None: ...
+
+    from xclif.definition import Argument
+
+    cli = Cli(root_command=root)
+    # Simulate root gaining arguments after construction (bypass __post_init__ guard)
+    cli.root_command.arguments = [Argument("name", str, "")]
+    with pytest.raises(ValueError, match="Cannot add subcommand"):
+        cli.add_command(["sub"], Command("sub", lambda: 0))
+
+
+def test_cli_construction_with_root_having_arguments_raises():
+    @command()
+    def root(name: str) -> None: ...
+
+    with pytest.raises(ValueError, match="Cannot add subcommand"):
+        Cli(root_command=root)
 
 
 # ---------------------------------------------------------------------------

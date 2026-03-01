@@ -47,6 +47,7 @@ class Cli:
         from xclif.completions import make_completions_command
 
         # Add completions subcommand
+        self.root_command._assert_no_arguments(adding="completions")
         self.root_command.subcommands["completions"] = make_completions_command(
             self.root_command
         )
@@ -69,6 +70,7 @@ class Cli:
             cursor = cursor.subcommands.setdefault(
                 part, Command(part, lambda: 0)
             )
+        cursor._assert_no_arguments(adding=command.name)
         cursor.subcommands[command.name] = command
 
     @classmethod
