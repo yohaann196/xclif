@@ -147,34 +147,29 @@ def typer_results(n: int) -> list[Result]:
 # ---------------------------------------------------------------------------
 
 def xclif_results(n: int) -> list[Result]:
-    from xclif import Cli, command
+    from xclif.command import Command
 
-    @command("greeter")
-    def root() -> None:
-        """Greeter CLI."""
+    root = Command("greeter", lambda: None)
 
-    @command()
+    @root.command()
     def greet(name: str, greeting: str = "Hello", count: int = 1) -> None:
         for _ in range(count):
             print(f"{greeting}, {name}!")
 
-    @command()
+    config = root.group("config")
+
+    @config.command()
     def set(key: str, value: str) -> None:
         print(f"Set {key}={value}")
 
-    @command("get")
+    @config.command("get")
     def get_cmd(key: str) -> None:
         print(f"Get {key}")
-
-    cli = Cli(root_command=root)
-    cli.add_command(["greet"], greet)
-    cli.add_command(["config", "set"], set)
-    cli.add_command(["config", "get"], get_cmd)
 
     results = []
     for label, args in SCENARIOS:
         with silence():  # suppress Rich help output during timing
-            mean, mn = bench(lambda a=args: cli.root_command.execute(a), n)
+            mean, mn = bench(lambda a=args: root.execute(a), n)
         results.append(Result("Xclif", label, mean, mn, n))
     return results
 

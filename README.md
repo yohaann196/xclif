@@ -88,16 +88,16 @@ Benchmarked on macOS (Apple Silicon, Python 3.12, 30 iterations + 3 warmup, meas
 
 | Scenario | Click | Typer | Xclif (`from_routes`) | Xclif (flat) |
 |---|---|---|---|---|
-| `greet World` | 26.7 | 37.6 | 39.5 | **25.4** ✅ |
-| `greet` + options | 26.9 | 36.8 | 40.2 | **25.4** ✅ |
-| `config set` | 27.3 | 37.3 | 39.4 | **25.5** ✅ |
-| `config get` | 29.1 | 36.8 | 40.6 | **25.4** ✅ |
-| `--help` | **28.3** ✅ | 82.2 | 58.5 | 46.2 |
-| `greet --help` | **29.0** ✅ | 82.8 | 60.1 | 46.2 |
+| `greet World` | 33.1 | **13.2** ✅ | 42.0 | 29.9 |
+| `greet` + options | 30.4 | **13.7** ✅ | 44.1 | 28.3 |
+| `config set` | 30.3 | **13.8** ✅ | 45.2 | 30.2 |
+| `config get` | 28.1 | **12.8** ✅ | 43.2 | 29.5 |
+| `--help` | 30.6 | **12.8** ✅ | 63.6 | 60.8 |
+| `greet --help` | 31.8 | **13.0** ✅ | 69.9 | 49.6 |
 
-**Xclif (flat)** uses the decorator API (`Command.command()` / `Command.group()`) instead of `from_routes`, eliminating the package-walker overhead (~14 ms). Command execution lands ~1 ms ahead of Click. The `--help` gap (~17 ms vs Click) is Rich's lazy-import cost.
+**Xclif (flat)** uses the decorator API (`Command.command()` / `Command.group()`) instead of `from_routes`, eliminating the package-walker overhead (~12 ms). Command execution is comparable to Click. The `--help` gap (~19–29 ms vs Click) is Rich's lazy-import cost.
 
-**`from_routes`** adds ~14 ms for the package walker on top, making it slower than Click on every scenario — the trade-off for zero-registration file-based routing.
+**`from_routes`** adds ~12 ms for the package walker on top, making it slower than Click on every scenario — the trade-off for zero-registration file-based routing.
 
 To reproduce:
 
