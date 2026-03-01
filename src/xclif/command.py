@@ -170,6 +170,20 @@ class Command:
         )
         _rprint(help_text)
 
+    def command(self, name: str | None = None) -> "Callable[[Callable], Command]":
+        def _decorator(func: Callable) -> "Command":
+            cmd = command(name)(func)
+            self._assert_no_arguments(adding=cmd.name)
+            self.subcommands[cmd.name] = cmd
+            return cmd
+        return _decorator
+
+    def group(self, name: str) -> "Command":
+        self._assert_no_arguments(adding=name)
+        cmd = Command(name, lambda: 0)
+        self.subcommands[name] = cmd
+        return cmd
+
     def execute(self, args: list[str] | None = None) -> int:
         try:
             return parse_and_execute_impl(sys.argv[1:] if args is None else args, self)

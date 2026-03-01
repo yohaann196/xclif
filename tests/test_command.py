@@ -321,3 +321,88 @@ def test_non_list_option_is_not_list():
     def f(name: str = "default") -> None: ...
     args, opts = extract_parameters(f)
     assert opts["name"].is_list is False
+
+
+# ---------------------------------------------------------------------------
+# Command.command() and Command.group()
+# ---------------------------------------------------------------------------
+
+
+def test_command_method_registers_subcommand():
+    root = Command("root", lambda: 0)
+
+    @root.command()
+    def greet(name: str) -> None: ...
+
+    assert "greet" in root.subcommands
+
+
+def test_command_method_uses_function_name():
+    root = Command("root", lambda: 0)
+
+    @root.command()
+    def hello(name: str) -> None: ...
+
+    assert "hello" in root.subcommands
+    assert root.subcommands["hello"].name == "hello"
+
+
+def test_command_method_uses_explicit_name():
+    root = Command("root", lambda: 0)
+
+    @root.command("hi")
+    def hello(name: str) -> None: ...
+
+    assert "hi" in root.subcommands
+    assert "hello" not in root.subcommands
+
+
+def test_command_method_returns_command():
+    root = Command("root", lambda: 0)
+
+    @root.command()
+    def greet(name: str) -> None: ...
+
+    assert isinstance(greet, Command)
+
+
+def test_group_creates_namespace_subcommand():
+    root = Command("root", lambda: 0)
+    grp = root.group("config")
+
+    assert "config" in root.subcommands
+    assert isinstance(grp, Command)
+    assert grp.name == "config"
+
+
+def test_group_returns_command_for_chaining():
+    root = Command("root", lambda: 0)
+    config = root.group("config")
+
+    @config.command()
+    def set(key: str, value: str) -> None: ...
+
+    assert "set" in config.subcommands
+    assert "config" in root.subcommands
+
+
+def test_chained_group_command_nesting():
+    root = Command("root", lambda: 0)
+    config = root.group("config")
+
+    @config.command("get")
+    def get_cmd(key: str) -> None: ...
+
+    assert "config" in root.subcommands
+    assert "get" in root.subcommands["config"].subcommands
+
+
+def test_command_method_on_command_with_arguments_raises():
+    root = Command("root", lambda: 0)
+    # Add a positional argument directly
+    from xclif.definition import Argument
+    root.arguments.append(Argument("file", str, ""))
+
+    with pytest.raises(ValueError, match="positional arguments"):
+        @root.command()
+        def sub() -> None: ...

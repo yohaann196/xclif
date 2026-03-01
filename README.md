@@ -90,6 +90,31 @@ No registration, no boilerplate. Drop a file in the right folder and the command
 - **Automatic plugin discovery** — third-party subcommands via entry points (like Git or cargo)
 - **Easy testing** — `command.execute(["greet", "Alice"])` with explicit arg lists, no mocking needed
 
+## Performance
+
+Benchmarked on macOS (Apple Silicon, Python 3.12, 30 iterations + 3 warmup, measured as wall-clock subprocess time).
+
+**Command execution** (ms — lower is better):
+
+| Scenario | Click | Typer | Xclif (`from_routes`) | Xclif (flat) |
+|---|---|---|---|---|
+| `greet World` | 26.7 | 37.6 | 39.5 | **25.4** ✅ |
+| `greet` + options | 26.9 | 36.8 | 40.2 | **25.4** ✅ |
+| `config set` | 27.3 | 37.3 | 39.4 | **25.5** ✅ |
+| `config get` | 29.1 | 36.8 | 40.6 | **25.4** ✅ |
+| `--help` | **28.3** ✅ | 82.2 | 58.5 | 46.2 |
+| `greet --help` | **29.0** ✅ | 82.8 | 60.1 | 46.2 |
+
+**Xclif (flat)** uses the decorator API (`Command.command()` / `Command.group()`) instead of `from_routes`, eliminating the package-walker overhead (~14 ms). Command execution lands ~1 ms ahead of Click. The `--help` gap (~17 ms vs Click) is Rich's lazy-import cost.
+
+**`from_routes`** adds ~14 ms for the package walker on top, making it slower than Click on every scenario — the trade-off for zero-registration file-based routing.
+
+To reproduce:
+
+```bash
+uv run python benchmarks/bench_frameworks.py --iterations 30
+```
+
 ## ExtendedIO
 
 ExtendedIO is Xclif's approach to transparent resource access. Instead of limiting CLI inputs to local file paths, ExtendedIO lets commands accept arbitrary URIs — URLs, zip archives, SSH paths, git repositories — and resolves them behind the scenes. The API uses dependency injection to provide a unified interface for accessing these resources.
