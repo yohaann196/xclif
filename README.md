@@ -14,8 +14,6 @@
 
 > Xliner's CLI Framework
 
-Xclif is an opinionated framework for building beautiful CLIs that scale with complexity, featuring file-based routing and a decorator-based API. It can help with writing [12 Factor CLI Apps](https://medium.com/@jdxcode/12-factor-cli-apps-dd3c227a0e46) with ease.
-
 Read the [Manifesto](MANIFESTO.md) to understand *why* Xclif exists and how it compares to Click, Typer, and argparse.
 
 ## Installation
@@ -24,15 +22,13 @@ Read the [Manifesto](MANIFESTO.md) to understand *why* Xclif exists and how it c
 pip install xclif
 ```
 
-Or, if you're using [uv](https://github.com/astral-sh/uv):
+Or with [uv](https://github.com/astral-sh/uv):
 
 ```bash
 uv add xclif
 ```
 
 ## Quick Start
-
-### 1. Define your routes
 
 Your directory structure *is* your command tree:
 
@@ -49,8 +45,6 @@ myapp/
         └── set.py        →  myapp config set
 ```
 
-### 2. Write commands as functions
-
 ```python
 # routes/greet.py
 from xclif import command
@@ -60,10 +54,6 @@ def _(name: str, template: str = "Hello, {}!") -> None:
     """Greet someone by name."""
     print(template.format(name))
 ```
-
-No default → positional argument. Has default → `--template` option. Docstring → help text. Type annotation → parser. The function signature *is* the CLI contract.
-
-### 3. Three-line entry point
 
 ```python
 # __main__.py
@@ -75,7 +65,7 @@ if __name__ == "__main__":
     cli()
 ```
 
-No registration, no boilerplate. Drop a file in the right folder and the command exists.
+No default → positional argument. Has default → `--template` option. Docstring → help text. Drop a file in the right folder and the command exists.
 
 ## Features
 
@@ -164,13 +154,7 @@ ExtendedIO is Xclif's approach to transparent resource access. Instead of limiti
 
 ## Contributing
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for an overview of the internal code structure.
-
-Run tests with:
-
-```bash
-uv run pytest
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

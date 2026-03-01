@@ -80,12 +80,12 @@ For smaller CLIs, you can build the command tree directly without file-based rou
 
    root = Command("myapp", lambda: 0)
 
-   @root.command()
+   @root.command()           # name comes from the function: "greet"
    def greet(name: str) -> None:
        """Greet someone."""
        print(f"Hello, {name}!")
 
-   config = root.group("config")
+   config = root.group("config")   # groups always take an explicit name
 
    @config.command()
    def get(key: str) -> None:
@@ -94,6 +94,17 @@ For smaller CLIs, you can build the command tree directly without file-based rou
 
    cli = Cli(root_command=root)
    cli()
+
+You can also pass an explicit name string to override the function name — useful when the
+natural Python name conflicts with a keyword or you want a different CLI name:
+
+.. code-block:: python
+
+   @root.command("get")
+   def get_value(key: str) -> None:   # CLI command is "get", not "get_value"
+       ...
+
+See :doc:`commands` for the full naming rules (explicit > function name > module inference).
 
 Testing
 -------

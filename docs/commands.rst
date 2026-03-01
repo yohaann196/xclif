@@ -31,29 +31,42 @@ This produces::
 Command naming
 --------------
 
-The command name is determined by the function name:
+There are three ways to name a command, listed in order of precedence:
+
+**1. Explicit name** — pass a string to ``@command()``:
+
+.. code-block:: python
+
+   @command("deploy")
+   def whatever(...): ...   # command is named "deploy"
+
+The string argument wins regardless of the function name or module name.
+
+**2. Function name** — omit the argument and name the function:
 
 .. code-block:: python
 
    @command()
    def greet(...): ...   # command is named "greet"
 
-In file-based routing, each module file (e.g. ``greet.py``) already carries the intended
-name. Using ``_`` as the function name tells Xclif to derive the command name from the
-module instead of the function:
+This is the most natural form for the decorator/flat API.
+
+**3. Module inference** — name the function ``_``:
 
 .. code-block:: python
 
-   # In greet.py — command is named "greet" (from the module)
+   # In routes/greet.py — command is named "greet" (from the module)
    @command()
    def _(...): ...
 
-You can also pass an explicit name to override both:
+When the function is named ``_``, Xclif derives the command name from the last component
+of the module's dotted path. This is the idiomatic style for file-based routing: the
+filename already carries the command name, so duplicating it in the function name is
+unnecessary.
 
-.. code-block:: python
-
-   @command("deploy")
-   def _(...): ...        # command is named "deploy"
+All three forms are equivalent in what they produce — the only difference is *where* the
+name comes from. In practice, prefer the module-inference style (``def _``) in route
+files and the function-name style (``def greet``) in the decorator API.
 
 Parameter rules
 ---------------
