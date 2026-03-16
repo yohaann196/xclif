@@ -201,3 +201,14 @@ def test_cli_call_exits_with_usage_error_on_bad_args(monkeypatch):
         cli()
     assert exc_info.value.code == EXIT_USAGE_ERROR
 
+
+def test_cli_call_reraises_keyboard_interrupt(monkeypatch):
+    def raise_interrupt(args=None):
+        raise KeyboardInterrupt
+
+    root = Command("myapp", lambda: 0)
+    cli = Cli(root_command=root)
+    monkeypatch.setattr(cli.root_command, "execute", raise_interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        cli()
+

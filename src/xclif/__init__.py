@@ -63,7 +63,7 @@ class Cli:
     def __call__(self) -> NoReturn:
         try:
             sys.exit(self.root_command.execute())
-        except SystemExit:
+        except (SystemExit, KeyboardInterrupt):
             raise
         except BaseException:
             traceback.print_exc()
