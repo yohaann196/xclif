@@ -3,8 +3,19 @@
 import pytest
 
 from xclif.command import Command, command, extract_parameters
-from xclif.constants import NO_DESC
+from xclif.constants import NO_DESC, EXIT_OK, EXIT_INTERNAL_ERROR, EXIT_USAGE_ERROR
 from xclif.definition import Argument, Option
+
+
+# ---------------------------------------------------------------------------
+# Exit code constants
+# ---------------------------------------------------------------------------
+
+
+def test_exit_code_constants_values():
+    assert EXIT_OK == 0
+    assert EXIT_INTERNAL_ERROR == 1
+    assert EXIT_USAGE_ERROR == 2
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +158,20 @@ def test_command_execute_returns_int(capsys):
     result = cmd.execute([])
     assert result == 0
     assert "ran" in capsys.readouterr().out
+
+
+def test_command_execute_returns_usage_error_code_on_bad_args(capsys):
+    cmd = Command("test", lambda: 0)
+    result = cmd.execute(["--unknown-flag"])
+    assert result == 2
+    captured = capsys.readouterr()
+    assert "Error" in captured.err
+
+
+def test_command_execute_usage_error_exit_code_matches_constant():
+    cmd = Command("test", lambda: 0)
+    result = cmd.execute(["--unknown-flag"])
+    assert result == EXIT_USAGE_ERROR
 
 
 # ---------------------------------------------------------------------------
