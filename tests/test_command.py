@@ -168,6 +168,16 @@ def test_command_execute_returns_usage_error_code_on_bad_args(capsys):
     assert "Error" in captured.err
 
 
+def test_execute_unexpected_exception_returns_internal_error(capsys):
+    def run() -> None:
+        raise RuntimeError("something went wrong")
+
+    cmd = Command("test", run)
+    result = cmd.execute([])
+    assert result == EXIT_INTERNAL_ERROR
+    assert "RuntimeError" in capsys.readouterr().err
+
+
 # ---------------------------------------------------------------------------
 # Command.print_short_help — smoke test (just ensure no crash)
 # ---------------------------------------------------------------------------
