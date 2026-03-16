@@ -6,7 +6,6 @@ import pytest
 
 from xclif import Cli, command
 from xclif.command import Command
-from xclif.constants import EXIT_INTERNAL_ERROR, EXIT_USAGE_ERROR
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +176,8 @@ def test_cli_call_exits_with_zero_on_success(monkeypatch):
 
 
 def test_cli_call_exits_with_internal_error_on_unexpected_exception(monkeypatch, capsys):
+    from xclif.constants import EXIT_INTERNAL_ERROR
+
     def raise_error(args=None):
         raise RuntimeError("unexpected bug")
 
@@ -191,6 +192,8 @@ def test_cli_call_exits_with_internal_error_on_unexpected_exception(monkeypatch,
 
 
 def test_cli_call_exits_with_usage_error_on_bad_args(monkeypatch):
+    from xclif.constants import EXIT_USAGE_ERROR
+
     monkeypatch.setattr("sys.argv", ["myapp", "--unknown"])
     root = Command("myapp", lambda: 0)
     cli = Cli(root_command=root)
