@@ -168,12 +168,6 @@ def test_command_execute_returns_usage_error_code_on_bad_args(capsys):
     assert "Error" in captured.err
 
 
-def test_command_execute_usage_error_exit_code_matches_constant():
-    cmd = Command("test", lambda: 0)
-    result = cmd.execute(["--unknown-flag"])
-    assert result == EXIT_USAGE_ERROR
-
-
 # ---------------------------------------------------------------------------
 # Command.print_short_help — smoke test (just ensure no crash)
 # ---------------------------------------------------------------------------
