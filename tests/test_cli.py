@@ -159,3 +159,46 @@ def test_from_routes_greeter_config_has_set_and_get():
     config = cli.root_command.subcommands["config"]
     assert "set" in config.subcommands
     assert "get" in config.subcommands
+
+
+# ---------------------------------------------------------------------------
+# Cli.__call__ — exit code behaviour
+# ---------------------------------------------------------------------------
+
+
+def test_cli_call_exits_with_zero_on_success(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["myapp"])
+    root = Command("myapp", lambda: 0)
+    cli = Cli(root_command=root)
+    with pytest.raises(SystemExit) as exc_info:
+        cli()
+    assert exc_info.value.code == 0
+
+
+def test_cli_call_exits_with_internal_error_on_unexpected_exception(monkeypatch, capsys):
+    from xclif.constants import EXIT_INTERNAL_ERROR
+
+    def raise_error(args=None):
+        raise RuntimeError("unexpected bug")
+
+    root = Command("myapp", lambda: 0)
+    cli = Cli(root_command=root)
+    # Patch execute to simulate an unexpected exception bubbling up
+    monkeypatch.setattr(cli.root_command, "execute", raise_error)
+    with pytest.raises(SystemExit) as exc_info:
+        cli()
+    assert exc_info.value.code == EXIT_INTERNAL_ERROR
+    captured = capsys.readouterr()
+    assert "RuntimeError" in captured.err
+
+
+def test_cli_call_exits_with_usage_error_on_bad_args(monkeypatch):
+    from xclif.constants import EXIT_USAGE_ERROR
+
+    monkeypatch.setattr("sys.argv", ["myapp", "--unknown"])
+    root = Command("myapp", lambda: 0)
+    cli = Cli(root_command=root)
+    with pytest.raises(SystemExit) as exc_info:
+        cli()
+    assert exc_info.value.code == EXIT_USAGE_ERROR
+
