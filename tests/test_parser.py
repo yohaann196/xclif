@@ -3,10 +3,10 @@
 import pytest
 
 from xclif.command import Command
+from xclif.constants import EXIT_OK, EXIT_USAGE_ERROR
 from xclif.definition import Argument, Option
 from xclif.errors import UsageError
 from xclif.parser import _parse_token_stream, parse_and_execute_impl
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -259,7 +259,7 @@ def test_leaf_no_args_executes(capsys):
 
     cmd = Command("test", run)
     result = parse_and_execute_impl([], cmd)
-    assert result == 0
+    assert result == EXIT_OK
     assert "ran" in capsys.readouterr().out
 
 
@@ -409,14 +409,14 @@ def test_variadic_with_double_dash():
 def test_help_flag_returns_zero_and_prints(capsys):
     cmd = Command("test", lambda: 0)
     result = parse_and_execute_impl(["--help"], cmd)
-    assert result == 0
+    assert result == EXIT_OK
     assert capsys.readouterr().out != ""
 
 
 def test_help_short_flag_returns_zero(capsys):
     cmd = Command("test", lambda: 0)
     result = parse_and_execute_impl(["-h"], cmd)
-    assert result == 0
+    assert result == EXIT_OK
     assert capsys.readouterr().out != ""
 
 
@@ -442,7 +442,7 @@ def test_version_flag_prints_and_returns_zero(capsys):
     # Inject --version into implicit options (normally done by Cli)
     cmd.implicit_options["version"] = Option("version", bool, "Show version")
     result = parse_and_execute_impl(["--version"], cmd)
-    assert result == 0
+    assert result == EXIT_OK
     out = capsys.readouterr().out
     assert "myapp" in out
     assert "1.2.3" in out
@@ -464,7 +464,7 @@ def test_cascading_verbose_passed_to_context():
     child = Command("child", lambda: None)
     parent = Command("parent", lambda: None, subcommands={"child": child})
     result = parse_and_execute_impl(["--verbose", "child"], parent)
-    assert result == 0
+    assert result == EXIT_OK
 
 
 def test_verbose_not_in_child_run_kwargs():
@@ -488,7 +488,7 @@ def test_namespace_no_args_prints_help(capsys):
     child = Command("sub", lambda: 0)
     parent = Command("parent", lambda: 0, subcommands={"sub": child})
     result = parse_and_execute_impl([], parent)
-    assert result == 0
+    assert result == EXIT_OK
     assert capsys.readouterr().out != ""
 
 
@@ -583,7 +583,7 @@ def test_list_option_default_empty():
 def test_execute_catches_usage_error(capsys):
     cmd = Command("test", lambda name: None, arguments=[Argument("name", str, "desc")])
     result = cmd.execute([])
-    assert result == 2
+    assert result == EXIT_USAGE_ERROR
     err = capsys.readouterr().err
     assert "Error" in err
     assert "Missing required argument" in err

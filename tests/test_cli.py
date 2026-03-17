@@ -178,17 +178,20 @@ def test_cli_call_exits_with_zero_on_success(monkeypatch):
 def test_cli_call_exits_with_internal_error_on_unexpected_exception(monkeypatch, capsys):
     from xclif.constants import EXIT_INTERNAL_ERROR
 
-    def raise_error(args=None):
+    def buggy_run() -> None:
         raise RuntimeError("unexpected bug")
 
     root = Command("myapp", lambda: 0)
     cli = Cli(root_command=root)
-    monkeypatch.setattr(cli.root_command, "execute", raise_error)
+    cli.add_command(["buggy"], Command("buggy", buggy_run))
+    monkeypatch.setattr("sys.argv", ["myapp", "buggy"])
     with pytest.raises(SystemExit) as exc_info:
         cli()
     assert exc_info.value.code == EXIT_INTERNAL_ERROR
+    # Traceback should be printed exactly once (by execute(), not double-printed)
     captured = capsys.readouterr()
     assert "RuntimeError" in captured.err
+    assert captured.err.count("Traceback (most recent call last)") == 1
 
 
 def test_cli_call_exits_with_usage_error_on_bad_args(monkeypatch):
@@ -203,12 +206,13 @@ def test_cli_call_exits_with_usage_error_on_bad_args(monkeypatch):
 
 
 def test_cli_call_reraises_keyboard_interrupt(monkeypatch):
-    def raise_interrupt(args=None):
+    def run_then_interrupt() -> None:
         raise KeyboardInterrupt
 
     root = Command("myapp", lambda: 0)
     cli = Cli(root_command=root)
-    monkeypatch.setattr(cli.root_command, "execute", raise_interrupt)
+    cli.add_command(["interrupt"], Command("interrupt", run_then_interrupt))
+    monkeypatch.setattr("sys.argv", ["myapp", "interrupt"])
     with pytest.raises(KeyboardInterrupt):
         cli()
 

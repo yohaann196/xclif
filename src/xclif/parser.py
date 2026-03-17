@@ -62,6 +62,7 @@ from typing import TYPE_CHECKING
 
 from xclif.definition import Option
 from xclif.errors import UsageError
+from xclif.constants import EXIT_OK
 
 if TYPE_CHECKING:
     from xclif.command import Command
@@ -218,13 +219,13 @@ def parse_and_execute_impl(
             subcommand.print_long_help()
         else:
             command.print_long_help()
-        return 0
+        return EXIT_OK
 
     # --version: only present on root command (injected by Cli)
     if parsed_opts.get("version"):
         version = command.version or "unknown"
         print(f"{command.name} {version}")
-        return 0
+        return EXIT_OK
 
     # Build updated cascading context for children
     new_context = dict(context)
@@ -245,7 +246,7 @@ def parse_and_execute_impl(
 
     if command.subcommands and not positionals and not _user_opts(parsed_opts, command):
         command.print_short_help()
-        return 0
+        return EXIT_OK
 
     if command.subcommands and positionals:
         candidates = list(command.subcommands)
@@ -296,7 +297,7 @@ def parse_and_execute_impl(
         elif option.default is not None:
             user_kwargs[name] = option.default
 
-    return command.run(*converted_args, **user_kwargs) or 0
+    return command.run(*converted_args, **user_kwargs) or EXIT_OK
 
 
 def _user_opts(parsed_opts: dict, command: "Command") -> bool:

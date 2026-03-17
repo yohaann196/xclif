@@ -1,12 +1,10 @@
 import inspect
 import sys
-import traceback
 import types
 from dataclasses import dataclass
 from typing import NoReturn, Self
 
 from xclif.command import Command, command
-from xclif.constants import EXIT_INTERNAL_ERROR
 from xclif.definition import Option
 from xclif.importer import get_modules
 
@@ -61,13 +59,11 @@ class Cli:
         self.root_command.version = self.version
 
     def __call__(self) -> NoReturn:
-        try:
-            sys.exit(self.root_command.execute())
-        except (SystemExit, KeyboardInterrupt):
-            raise
-        except BaseException:
-            traceback.print_exc()
-            sys.exit(EXIT_INTERNAL_ERROR)
+        # execute() already catches all unexpected exceptions, prints the
+        # traceback, and returns EXIT_INTERNAL_ERROR.  The only thing that
+        # can propagate out of execute() is SystemExit or KeyboardInterrupt,
+        # so no second BaseException handler is needed here.
+        sys.exit(self.root_command.execute())
 
     def add_command(self, path: list[str], command: Command) -> None:
         cursor = self.root_command

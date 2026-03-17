@@ -1,11 +1,12 @@
 import inspect
 import sys
+import traceback
 import textwrap
 from dataclasses import dataclass, field
 from typing import Callable
 
 from xclif.annotations import annotation2converter, is_list_type
-from xclif.constants import INITIAL_LEFT_PADDING, NAME_DESC_PADDING, NO_DESC, EXIT_USAGE_ERROR
+from xclif.constants import INITIAL_LEFT_PADDING, NAME_DESC_PADDING, NO_DESC, EXIT_USAGE_ERROR, EXIT_INTERNAL_ERROR
 from xclif.definition import IMPLICIT_OPTIONS, Argument, Option
 from xclif.errors import UsageError
 from xclif.parser import parse_and_execute_impl
@@ -192,6 +193,11 @@ class Command:
             if exc.hint:
                 _rprint(f"[dim]{exc.hint}[/dim]", file=sys.stderr)
             return EXIT_USAGE_ERROR
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except BaseException:
+            traceback.print_exc()
+            return EXIT_INTERNAL_ERROR
 
     @property
     def description(self) -> str:
