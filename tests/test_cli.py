@@ -182,8 +182,8 @@ def test_cli_call_exits_with_internal_error_on_unexpected_exception(monkeypatch,
         raise RuntimeError("unexpected bug")
 
     root = Command("myapp", lambda: 0)
-    root.subcommands["buggy"] = Command("buggy", buggy_run)
     cli = Cli(root_command=root)
+    cli.add_command(["buggy"], Command("buggy", buggy_run))
     monkeypatch.setattr("sys.argv", ["myapp", "buggy"])
     with pytest.raises(SystemExit) as exc_info:
         cli()
@@ -210,8 +210,8 @@ def test_cli_call_reraises_keyboard_interrupt(monkeypatch):
         raise KeyboardInterrupt
 
     root = Command("myapp", lambda: 0)
-    root.subcommands["interrupt"] = Command("interrupt", run_then_interrupt)
     cli = Cli(root_command=root)
+    cli.add_command(["interrupt"], Command("interrupt", run_then_interrupt))
     monkeypatch.setattr("sys.argv", ["myapp", "interrupt"])
     with pytest.raises(KeyboardInterrupt):
         cli()
